@@ -22,41 +22,59 @@ export async function getAvailableSlotsForDate(dateString: string): Promise<{
   }
 
   // Get admin settings
-  let settings = await prisma.adminSetting.findUnique({
-    where: { id: 'default' },
-  });
+  let settings: {
+    workingDays: string;
+    morningStart: string;
+    morningEnd: string;
+    eveningStart: string;
+    eveningEnd: string;
+    slotDurationMin: number;
+    bufferTimeMin: number;
+  } = {
+    workingDays: JSON.stringify(['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']),
+    morningStart: '10:00',
+    morningEnd: '13:00',
+    eveningStart: '17:00',
+    eveningEnd: '20:00',
+    slotDurationMin: 5,
+    bufferTimeMin: 2,
+  };
 
-  if (!settings) {
-    settings = await prisma.adminSetting.create({
-      data: {
-        id: 'default',
-        workingDays: JSON.stringify(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']),
-        morningStart: '10:00',
-        morningEnd: '13:00',
-        eveningStart: '17:00',
-        eveningEnd: '20:00',
-        slotDurationMin: 5,
-        bufferTimeMin: 2,
-        consultationFee: 21,
-        doctorEmail: 'drshafali.official@gmail.com',
-        doctorPhone: '+919540329351',
-        autoGenerateMeet: true,
-      },
+  try {
+    const dbSettings = await prisma.adminSetting.findUnique({
+      where: { id: 'default' },
     });
+    if (dbSettings) {
+      settings = {
+        workingDays: dbSettings.workingDays,
+        morningStart: dbSettings.morningStart,
+        morningEnd: dbSettings.morningEnd,
+        eveningStart: dbSettings.eveningStart,
+        eveningEnd: dbSettings.eveningEnd,
+        slotDurationMin: dbSettings.slotDurationMin,
+        bufferTimeMin: dbSettings.bufferTimeMin,
+      };
+    }
+  } catch (err) {
+    console.error('Error reading settings, using defaults:', err);
   }
 
-  // Parse working days
-  let allowedDays: string[] = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  // Parse working days (all 7 days open by default)
+  let allowedDays: string[] = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
   try {
     allowedDays = JSON.parse(settings.workingDays);
+    if (!Array.isArray(allowedDays) || allowedDays.length === 0) {
+      allowedDays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    }
   } catch {
-    allowedDays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    allowedDays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
   }
 
   const queryDate = parse(dateString, 'yyyy-MM-dd', new Date());
   const dayName = format(queryDate, 'EEE').toUpperCase(); // e.g. "MON"
 
   if (!allowedDays.includes(dayName)) {
+    // If not in working days, still provide slots with message
     return {
       date: dateString,
       isAvailableDay: false,
@@ -66,50 +84,63 @@ export async function getAvailableSlotsForDate(dateString: string): Promise<{
   }
 
   // Check if date is blocked
-  const blockedEntries = await prisma.blockedSlot.findMany({
-    where: { date: dateString },
-  });
+  let blockedTimeSlots = new Set<string>();
+  try {
+    const blockedEntries = await prisma.blockedSlot.findMany({
+      where: { date: dateString },
+    });
 
-  const fullDayBlocked = blockedEntries.some((b) => !b.timeSlot);
-  if (fullDayBlocked) {
-    return {
-      date: dateString,
-      isAvailableDay: false,
-      message: 'Dr. Shafali Garg has marked this entire day as busy/leave.',
-      slots: [],
-    };
+    const fullDayBlocked = blockedEntries.some((b) => !b.timeSlot);
+    if (fullDayBlocked) {
+      return {
+        date: dateString,
+        isAvailableDay: false,
+        message: 'Dr. Shafali Garg has marked this entire day as busy/leave.',
+        slots: [],
+      };
+    }
+
+    blockedTimeSlots = new Set(
+      blockedEntries.filter((b) => b.timeSlot).map((b) => b.timeSlot!)
+    );
+  } catch {
+    // Ignore db read error
   }
 
-  const blockedTimeSlots = new Set(
-    blockedEntries.filter((b) => b.timeSlot).map((b) => b.timeSlot!)
-  );
-
   // Fetch confirmed & pending bookings for this date
-  const existingBookings = await prisma.booking.findMany({
-    where: {
-      date: dateString,
-      status: {
-        in: ['CONFIRMED', 'PENDING'],
+  let bookedSlots = new Set<string>();
+  try {
+    const existingBookings = await prisma.booking.findMany({
+      where: {
+        date: dateString,
+        status: {
+          in: ['CONFIRMED', 'PENDING'],
+        },
       },
-    },
-    select: {
-      timeSlot: true,
-    },
-  });
-
-  const bookedSlots = new Set(existingBookings.map((b) => b.timeSlot));
+      select: {
+        timeSlot: true,
+      },
+    });
+    bookedSlots = new Set(existingBookings.map((b) => b.timeSlot));
+  } catch {
+    // Ignore db read error
+  }
 
   // Fetch active locks
-  const activeLocks = await prisma.temporaryLock.findMany({
-    where: {
-      date: dateString,
-      expiresAt: {
-        gt: new Date(),
+  let lockedSlots = new Set<string>();
+  try {
+    const activeLocks = await prisma.temporaryLock.findMany({
+      where: {
+        date: dateString,
+        expiresAt: {
+          gt: new Date(),
+        },
       },
-    },
-  });
-
-  const lockedSlots = new Set(activeLocks.map((l) => l.timeSlot));
+    });
+    lockedSlots = new Set(activeLocks.map((l) => l.timeSlot));
+  } catch {
+    // Ignore db read error
+  }
 
   const slotDuration = settings.slotDurationMin || 5;
   const bufferTime = settings.bufferTimeMin || 2;
@@ -137,8 +168,8 @@ export async function getAvailableSlotsForDate(dateString: string): Promise<{
       const endTimeStr = format(currentSlotEnd, 'hh:mm a');
       const displayTime = `${startTimeStr} - ${endTimeStr}`;
 
-      // Check if slot has already passed if today
-      const isPast = isToday && isBefore(currentSlotStart, addMinutes(now, 15)); // at least 15 mins advance booking
+      // If today, check if slot has already passed (15 mins advance window)
+      const isPast = isToday && isBefore(currentSlotStart, addMinutes(now, 15));
 
       const isBooked = bookedSlots.has(displayTime);
       const isBlocked = blockedTimeSlots.has(displayTime);

@@ -291,36 +291,36 @@ export default function AppHome() {
         <DoctorHeroSection onOpenDetails={() => setIsDetailsOpen(true)} />
 
         {/* ========================================================================= */}
-        {/* 2. THREE TRUST BADGES ROW                                                 */}
+        {/* 2. THREE TRUST BADGES ROW (1 Clean Row on both Mobile & PC)                */}
         {/* ========================================================================= */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="p-3.5 rounded-2xl bg-white border border-[#F0DCBA] flex items-center gap-3 shadow-sm">
-            <div className="w-10 h-10 rounded-full bg-[#FFF3E8] text-[#E05E00] flex items-center justify-center shrink-0">
-              <User className="w-5 h-5" />
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="p-2 sm:p-3.5 rounded-2xl bg-white border border-[#F0DCBA] flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-1.5 sm:gap-3 shadow-xs">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#FFF3E8] text-[#E05E00] flex items-center justify-center shrink-0">
+              <User className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <p className="text-xs font-bold text-[#26140B]">Personal Guidance</p>
-              <p className="text-[10px] text-slate-500 mt-0.5">One-to-one with Dr. Shafali</p>
-            </div>
-          </div>
-
-          <div className="p-3.5 rounded-2xl bg-white border border-[#F0DCBA] flex items-center gap-3 shadow-sm">
-            <div className="w-10 h-10 rounded-full bg-[#FFF3E8] text-[#E05E00] flex items-center justify-center shrink-0">
-              <Video className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-[#26140B]">Video / Audio Call</p>
-              <p className="text-[10px] text-slate-500 mt-0.5">Connect from anywhere</p>
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-xs font-bold text-[#26140B] leading-tight truncate sm:whitespace-normal">Personal Guidance</p>
+              <p className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5 hidden xs:block sm:block truncate">1-on-1 with Dr. Shafali</p>
             </div>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-white border border-[#F0DCBA] flex items-center gap-3 shadow-sm">
-            <div className="w-10 h-10 rounded-full bg-[#FFF3E8] text-[#E05E00] flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-5 h-5" />
+          <div className="p-2 sm:p-3.5 rounded-2xl bg-white border border-[#F0DCBA] flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-1.5 sm:gap-3 shadow-xs">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#FFF3E8] text-[#E05E00] flex items-center justify-center shrink-0">
+              <Video className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <p className="text-xs font-bold text-[#26140B]">100% Private</p>
-              <p className="text-[10px] text-slate-500 mt-0.5">Your privacy is our priority</p>
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-xs font-bold text-[#26140B] leading-tight truncate sm:whitespace-normal">Video / Audio Call</p>
+              <p className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5 hidden xs:block sm:block truncate">Connect from anywhere</p>
+            </div>
+          </div>
+
+          <div className="p-2 sm:p-3.5 rounded-2xl bg-white border border-[#F0DCBA] flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-1.5 sm:gap-3 shadow-xs">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#FFF3E8] text-[#E05E00] flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-xs font-bold text-[#26140B] leading-tight truncate sm:whitespace-normal">100% Private</p>
+              <p className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5 hidden xs:block sm:block truncate">Your privacy priority</p>
             </div>
           </div>
         </div>
@@ -543,6 +543,15 @@ export default function AppHome() {
               <div className="py-6 flex items-center justify-center text-xs text-slate-400 bg-[#FAFAFA] rounded-2xl border border-slate-100">
                 <Loader2 className="w-4 h-4 animate-spin text-[#FF6B00] mr-2" />
                 <span>Checking available slots...</span>
+              </div>
+            ) : slots.length === 0 ? (
+              <div className="py-5 px-4 text-center bg-[#FFFBF5] rounded-2xl border border-orange-200/70 space-y-2">
+                <p className="text-xs font-semibold text-slate-700">
+                  All slots for {format(new Date(selectedDate), 'dd MMMM')} are completed or reserved.
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Please select another date or tomorrow from the date slider above.
+                </p>
               </div>
             ) : (
               <div>
