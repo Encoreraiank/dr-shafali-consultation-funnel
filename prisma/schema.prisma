@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AdminSetting {
+  id                String   @id @default("default")
+  adminPassword     String   @default("admin@drshafali2026")
+  workingDays       String   @default("[\"MON\",\"TUE\",\"WED\",\"THU\",\"FRI\",\"SAT\"]") // JSON array
+  morningStart      String   @default("10:00") // 10:00 AM
+  morningEnd        String   @default("13:00") // 1:00 PM
+  eveningStart      String   @default("17:00") // 5:00 PM
+  eveningEnd        String   @default("20:00") // 8:00 PM
+  slotDurationMin   Int      @default(5)
+  bufferTimeMin     Int      @default(2)
+  consultationFee   Int      @default(21)
+  doctorEmail       String   @default("drshafali.official@gmail.com")
+  doctorPhone       String   @default("+919540329351")
+  autoGenerateMeet  Boolean  @default(true)
+  updatedAt         DateTime @updatedAt
+}
+
+model BlockedSlot {
+  id        String   @id @default(cuid())
+  date      String   // "YYYY-MM-DD"
+  timeSlot  String?  // e.g. "10:00 AM - 10:05 AM" (if null, whole day is blocked)
+  reason    String?
+  createdAt DateTime @default(now())
+}
+
+model Booking {
+  id              String   @id @default(cuid())
+  bookingNumber   String   @unique // e.g. "DSG-84912"
+  patientName     String
+  patientPhone    String
+  patientEmail    String?
+  problemCategory String
+  problemDetail   String
+  
+  date            String   // "YYYY-MM-DD"
+  timeSlot        String   // "10:00 AM - 10:05 AM"
+  startTime       DateTime
+  endTime         DateTime
+  
+  amount          Int      @default(21)
+  paymentStatus   String   @default("PAID") // PENDING, PAID, FAILED, REFUNDED
+  paymentId       String?
+  orderId         String?
+  paymentMethod   String?  @default("UPI")
+  
+  meetUrl         String?  // Google Meet link
+  googleEventId   String?
+  
+  status          String   @default("CONFIRMED") // CONFIRMED, COMPLETED, CANCELLED, RESCHEDULED
+  notes           String?
+  
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model TemporaryLock {
+  id        String   @id @default(cuid())
+  date      String   // "YYYY-MM-DD"
+  timeSlot  String   // "10:00 AM - 10:05 AM"
+  sessionId String
+  expiresAt DateTime
+}
