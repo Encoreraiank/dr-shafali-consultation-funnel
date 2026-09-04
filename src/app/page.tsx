@@ -48,6 +48,17 @@ export default function AppHome() {
 
   // Mobile Bottom Sheet state
   const [isCheckoutOpen, setIsCheckoutOpen] = useState<boolean>(false);
+  const [checkoutStep, setCheckoutStep] = useState<'DETAILS' | 'UPI_PAY'>('DETAILS');
+  const [orderInfo, setOrderInfo] = useState<{
+    bookingNumber: string;
+    orderId: string;
+    amount: number;
+    upiId: string;
+    upiLink: string;
+    qrUrl: string;
+  } | null>(null);
+  const [copiedUpi, setCopiedUpi] = useState<boolean>(false);
+  const [utrNumber, setUtrNumber] = useState<string>('');
 
   // Slots
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -173,15 +184,15 @@ export default function AppHome() {
     try {
       const sessionId = `sess_${Date.now()}`;
 
-      // 1. Create order
+      // 1. Create order & get UPI payment details
       const orderRes = await fetch('/api/payment/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          patientName,
-          patientPhone,
+          patientName: patientName.trim(),
+          patientPhone: patientPhone.trim(),
           problemCategory: selectedTopic,
-          problemDetail: problemDetail || `${selectedTopic} consultation guidance`,
+          problemDetail: problemDetail.trim() || `${selectedTopic} consultation guidance`,
           date: selectedDate,
           timeSlot: selectedSlot,
           sessionId,
@@ -191,20 +202,45 @@ export default function AppHome() {
       const orderData = await orderRes.json();
       if (!orderRes.ok) throw new Error(orderData.error || 'Order failed');
 
-      // 2. Verify payment & generate Google Meet link
+      setOrderInfo({
+        bookingNumber: orderData.bookingNumber,
+        orderId: orderData.orderId,
+        amount: orderData.amount || 21,
+        upiId: orderData.upiId || '9540329351@paytm',
+        upiLink: orderData.upiLink || `upi://pay?pa=9540329351@paytm&pn=Dr%20Shafali%20Garg&am=21&cu=INR&tn=DSG%20Consultation`,
+        qrUrl: orderData.qrUrl || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=9540329351@paytm&pn=Dr%20Shafali%20Garg&am=21&cu=INR`,
+      });
+
+      // Switch to UPI payment screen
+      setCheckoutStep('UPI_PAY');
+    } catch (err: unknown) {
+      console.error(err);
+      setErrorMsg(err instanceof Error ? err.message : 'Booking failed. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleFinalizePayment = async () => {
+    if (!orderInfo) return;
+    setIsProcessing(true);
+    setErrorMsg('');
+
+    try {
+      const sessionId = `sess_${Date.now()}`;
       const verifyRes = await fetch('/api/payment/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          orderId: orderData.orderId,
-          paymentId: `pay_${Date.now()}`,
+          orderId: orderInfo.orderId,
+          paymentId: utrNumber ? `upi_${utrNumber}` : `upi_pay_${Date.now()}`,
           signature: `sig_${Date.now()}`,
           paymentMethod: 'UPI',
-          bookingNumber: orderData.bookingNumber,
-          patientName,
-          patientPhone,
+          bookingNumber: orderInfo.bookingNumber,
+          patientName: patientName.trim(),
+          patientPhone: patientPhone.trim(),
           problemCategory: selectedTopic,
-          problemDetail: problemDetail || `${selectedTopic} consultation guidance`,
+          problemDetail: problemDetail.trim() || `${selectedTopic} consultation guidance`,
           date: selectedDate,
           timeSlot: selectedSlot,
           sessionId,
@@ -217,20 +253,29 @@ export default function AppHome() {
       setConfirmedBooking(verifyData.booking);
       setConfirmedMeetUrl(verifyData.meetUrl);
       setIsCheckoutOpen(false);
+      setCheckoutStep('DETAILS');
       setIsPassOpen(true);
 
       // Trigger Confetti
       confetti({
-        particleCount: 90,
-        spread: 75,
+        particleCount: 100,
+        spread: 80,
         origin: { y: 0.6 },
         colors: ['#FF6B00', '#FFB800', '#10B981'],
       });
     } catch (err: unknown) {
       console.error(err);
-      setErrorMsg(err instanceof Error ? err.message : 'Booking failed. Please try again.');
+      setErrorMsg(err instanceof Error ? err.message : 'Payment confirmation failed. Please try again.');
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleCopyUpi = () => {
+    if (orderInfo?.upiId) {
+      navigator.clipboard.writeText(orderInfo.upiId);
+      setCopiedUpi(true);
+      setTimeout(() => setCopiedUpi(false), 2000);
     }
   };
 
@@ -679,75 +724,160 @@ export default function AppHome() {
               </span>
             </div>
 
-            <form onSubmit={handleBookingSubmit} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-700 font-semibold mb-1">
-                  Your Full Name <span className="text-[#FF6B00]">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={patientName}
-                  onChange={(e) => setPatientName(e.target.value)}
-                  placeholder="E.g. Rahul Sharma"
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-[#FF6B00]"
-                />
-              </div>
+            {checkoutStep === 'DETAILS' ? (
+              <form onSubmit={handleBookingSubmit} className="space-y-3 text-xs">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">
+                    Your Full Name <span className="text-[#FF6B00]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={patientName}
+                    onChange={(e) => setPatientName(e.target.value)}
+                    placeholder="E.g. Rahul Sharma"
+                    className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-[#FF6B00]"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-slate-700 font-semibold mb-1">
-                  WhatsApp Mobile Number <span className="text-[#FF6B00]">*</span>
-                </label>
-                <input
-                  type="tel"
-                  required
-                  value={patientPhone}
-                  onChange={(e) => setPatientPhone(e.target.value)}
-                  placeholder="+91 98765 43210"
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-[#FF6B00]"
-                />
-                <p className="text-[10px] text-emerald-700 mt-0.5">
-                  🔒 Google Meet link will be dispatched here.
-                </p>
-              </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">
+                    WhatsApp Mobile Number <span className="text-[#FF6B00]">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={patientPhone}
+                    onChange={(e) => setPatientPhone(e.target.value)}
+                    placeholder="+91 98765 43210"
+                    className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-[#FF6B00]"
+                  />
+                  <p className="text-[10px] text-emerald-700 mt-0.5">
+                    🔒 Google Meet link will be dispatched here.
+                  </p>
+                </div>
 
-              <div>
-                <label className="block text-slate-700 font-semibold mb-1">
-                  Brief Concern / Main Question (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={problemDetail}
-                  onChange={(e) => setProblemDetail(e.target.value)}
-                  placeholder="What primary issue would you like to discuss?"
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-[#FF6B00]"
-                />
-              </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">
+                    Brief Concern / Main Question (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={problemDetail}
+                    onChange={(e) => setProblemDetail(e.target.value)}
+                    placeholder="What primary issue would you like to discuss?"
+                    className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-[#FF6B00]"
+                  />
+                </div>
 
-              {errorMsg && (
-                <p className="text-xs text-rose-600 font-medium bg-rose-50 p-2.5 rounded-xl border border-rose-200">
-                  {errorMsg}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={isProcessing}
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#FF6B00] to-[#FFA000] hover:from-[#E05E00] hover:to-[#FF8800] text-white font-bold text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 transition-all mt-2"
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Verifying & Creating Google Meet...</span>
-                  </>
-                ) : (
-                  <>
-                    <Lock className="w-4 h-4" />
-                    <span>Pay ₹21 & Confirm Slot</span>
-                  </>
+                {errorMsg && (
+                  <p className="text-xs text-rose-600 font-medium bg-rose-50 p-2.5 rounded-xl border border-rose-200">
+                    {errorMsg}
+                  </p>
                 )}
-              </button>
-            </form>
+
+                <button
+                  type="submit"
+                  disabled={isProcessing}
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#FF6B00] to-[#FFA000] hover:from-[#E05E00] hover:to-[#FF8800] text-white font-bold text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 transition-all mt-2"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Generating UPI Payment...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-4 h-4" />
+                      <span>Proceed to UPI Payment (₹21) →</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            ) : (
+              /* STEP 2: DIRECT UPI PAYMENT SCREEN */
+              <div className="space-y-3.5 text-xs text-center">
+                
+                {/* 1-Click Pay on Mobile */}
+                {orderInfo?.upiLink && (
+                  <a
+                    href={orderInfo.upiLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full py-3 px-4 rounded-2xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-bold text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 active:scale-95 transition-all"
+                  >
+                    <span>⚡ Open UPI App (GPay / PhonePe / Paytm)</span>
+                  </a>
+                )}
+
+                {/* QR Code Container */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col items-center space-y-2">
+                  <p className="text-[11px] font-bold text-slate-800">
+                    Scan & Pay ₹21 with Any UPI App
+                  </p>
+                  
+                  {orderInfo?.qrUrl && (
+                    <div className="p-2 bg-white rounded-xl border border-slate-200 shadow-xs">
+                      <img
+                        src={orderInfo.qrUrl}
+                        alt="Dr. Shafali Garg UPI QR Code"
+                        className="w-40 h-40 object-contain mx-auto"
+                      />
+                    </div>
+                  )}
+
+                  {/* Copy UPI ID */}
+                  <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs">
+                    <span className="text-[11px] font-mono font-bold text-slate-700">
+                      {orderInfo?.upiId}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleCopyUpi}
+                      className="text-[10px] font-bold text-[#FF6B00] hover:text-[#E05E00] ml-1 flex items-center gap-0.5"
+                    >
+                      {copiedUpi ? 'Copied! ✓' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+
+                {errorMsg && (
+                  <p className="text-xs text-rose-600 font-medium bg-rose-50 p-2.5 rounded-xl border border-rose-200">
+                    {errorMsg}
+                  </p>
+                )}
+
+                {/* Confirm Paid Button */}
+                <button
+                  type="button"
+                  onClick={handleFinalizePayment}
+                  disabled={isProcessing}
+                  className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 transition-all"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Creating Your Google Meet Room...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>I Have Paid ₹21 • Confirm Slot</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Back to Details */}
+                <button
+                  type="button"
+                  onClick={() => setCheckoutStep('DETAILS')}
+                  className="text-[11px] text-slate-500 hover:text-slate-800 font-semibold underline pt-1"
+                >
+                  ← Edit Name / Phone Number
+                </button>
+
+              </div>
+            )}
 
           </div>
         </div>

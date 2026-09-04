@@ -7,18 +7,41 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { patientName, patientPhone, patientEmail, problemCategory, problemDetail, date, timeSlot, sessionId } = body;
 
-    if (!patientName || !patientPhone || !problemDetail || !date || !timeSlot) {
+    if (!patientName?.trim()) {
       return NextResponse.json(
-        { error: 'Please provide all required fields' },
+        { error: 'Please enter your full name' },
         { status: 400 }
       );
     }
 
-    // Get current fee from settings
-    const settings = await prisma.adminSetting.findUnique({
-      where: { id: 'default' },
-    });
-    const fee = settings?.consultationFee || 21;
+    if (!patientPhone?.trim()) {
+      return NextResponse.json(
+        { error: 'Please enter your WhatsApp mobile number' },
+        { status: 400 }
+      );
+    }
+
+    if (!date || !timeSlot) {
+      return NextResponse.json(
+        { error: 'Please select a date and time slot' },
+        { status: 400 }
+      );
+    }
+
+    // Get current fee from settings (safe try-catch)
+    let fee = 21;
+    let upiId = process.env.DOCTOR_UPI_ID || '9540329351@paytm';
+
+    try {
+      const settings = await prisma.adminSetting.findUnique({
+        where: { id: 'default' },
+      });
+      if (settings?.consultationFee) {
+        fee = settings.consultationFee;
+      }
+    } catch {
+      fee = 21;
+    }
 
     const bookingNumber = generateBookingNumber();
 
@@ -27,12 +50,15 @@ export async function POST(req: NextRequest) {
       receipt: `rcpt_${bookingNumber}`,
       notes: {
         bookingNumber,
-        patientName,
-        patientPhone,
+        patientName: patientName.trim(),
+        patientPhone: patientPhone.trim(),
         date,
         timeSlot,
       },
     });
+
+    const upiLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent('Dr. Shafali Garg')}&am=${fee}&cu=INR&tn=${encodeURIComponent(`DSG Consultation ${bookingNumber}`)}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(upiLink)}`;
 
     return NextResponse.json({
       success: true,
@@ -42,11 +68,14 @@ export async function POST(req: NextRequest) {
       amountPaise: order.amount,
       keyId: order.keyId,
       mode: order.mode,
+      upiId,
+      upiLink,
+      qrUrl,
     });
   } catch (error) {
     console.error('Create order error:', error);
     return NextResponse.json(
-      { error: 'Failed to create payment order' },
+      { error: 'Failed to initialize booking. Please try again.' },
       { status: 500 }
     );
   }
