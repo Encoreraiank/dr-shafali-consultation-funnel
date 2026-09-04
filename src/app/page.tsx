@@ -293,33 +293,33 @@ export default function AppHome() {
         {/* ========================================================================= */}
         {/* 2. THREE TRUST BADGES ROW (1 Clean Row on both Mobile & PC)                */}
         {/* ========================================================================= */}
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          <div className="p-2 sm:p-3.5 rounded-2xl bg-white border border-[#F0DCBA] flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-1.5 sm:gap-3 shadow-xs">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#FFF3E8] text-[#E05E00] flex items-center justify-center shrink-0">
-              <User className="w-4 h-4 sm:w-5 sm:h-5" />
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
+          <div className="p-2 sm:p-3.5 rounded-2xl bg-white border border-[#F0DCBA] flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-1 sm:gap-3 shadow-xs">
+            <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full bg-[#FFF3E8] text-[#E05E00] flex items-center justify-center shrink-0">
+              <User className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] sm:text-xs font-bold text-[#26140B] leading-tight truncate sm:whitespace-normal">Personal Guidance</p>
+              <p className="text-[10px] sm:text-xs font-bold text-[#26140B] leading-tight truncate sm:whitespace-normal">Personal Guidance</p>
               <p className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5 hidden xs:block sm:block truncate">1-on-1 with Dr. Shafali</p>
             </div>
           </div>
 
-          <div className="p-2 sm:p-3.5 rounded-2xl bg-white border border-[#F0DCBA] flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-1.5 sm:gap-3 shadow-xs">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#FFF3E8] text-[#E05E00] flex items-center justify-center shrink-0">
-              <Video className="w-4 h-4 sm:w-5 sm:h-5" />
+          <div className="p-2 sm:p-3.5 rounded-2xl bg-white border border-[#F0DCBA] flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-1 sm:gap-3 shadow-xs">
+            <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full bg-[#FFF3E8] text-[#E05E00] flex items-center justify-center shrink-0">
+              <Video className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] sm:text-xs font-bold text-[#26140B] leading-tight truncate sm:whitespace-normal">Video / Audio Call</p>
+              <p className="text-[10px] sm:text-xs font-bold text-[#26140B] leading-tight truncate sm:whitespace-normal">Video / Audio Call</p>
               <p className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5 hidden xs:block sm:block truncate">Connect from anywhere</p>
             </div>
           </div>
 
-          <div className="p-2 sm:p-3.5 rounded-2xl bg-white border border-[#F0DCBA] flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-1.5 sm:gap-3 shadow-xs">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#FFF3E8] text-[#E05E00] flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+          <div className="p-2 sm:p-3.5 rounded-2xl bg-white border border-[#F0DCBA] flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-1 sm:gap-3 shadow-xs">
+            <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full bg-[#FFF3E8] text-[#E05E00] flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] sm:text-xs font-bold text-[#26140B] leading-tight truncate sm:whitespace-normal">100% Private</p>
+              <p className="text-[10px] sm:text-xs font-bold text-[#26140B] leading-tight truncate sm:whitespace-normal">100% Private</p>
               <p className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5 hidden xs:block sm:block truncate">Your privacy priority</p>
             </div>
           </div>
