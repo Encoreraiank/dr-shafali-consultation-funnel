@@ -330,6 +330,12 @@ export default function AppHome() {
     return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&location=${location}&dates=${dates}`;
   };
 
+  const generateDoctorWhatsAppMessageUrl = () => {
+    if (!confirmedBooking) return '#';
+    const msg = `Namaste Dr. Shafali ji! 🙏\nI have booked a ₹21 Consultation with you.\n\n🎫 *Booking ID:* ${confirmedBooking.bookingNumber}\n👤 *Patient Name:* ${confirmedBooking.patientName}\n📱 *Phone:* ${confirmedBooking.patientPhone}\n📅 *Date:* ${confirmedBooking.date}\n⏰ *Time Slot:* ${confirmedBooking.timeSlot} (IST)\n🎯 *Topic:* ${confirmedBooking.problemCategory}\n📝 *My Query:* "${confirmedBooking.problemDetail || 'Consultation guidance'}"\n\n🔗 *Google Meet Link:*\n${confirmedMeetUrl}\n\nThank you!`;
+    return `https://wa.me/919540329351?text=${encodeURIComponent(msg)}`;
+  };
+
   return (
     <div className="min-h-screen bg-[#F7F2EA] text-slate-900 flex flex-col justify-between py-2 sm:py-6 px-2 sm:px-4">
       
@@ -963,11 +969,22 @@ export default function AppHome() {
             </div>
 
             <div className="space-y-2">
+              {/* 1-Click WhatsApp Direct Alert to Doctor */}
+              <a
+                href={generateDoctorWhatsAppMessageUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3 px-4 rounded-2xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition-all active:scale-95"
+              >
+                <MessageCircle className="w-4 h-4 fill-white" />
+                <span>Send Booking to Dr. Shafali on WhatsApp</span>
+              </a>
+
               <a
                 href={confirmedMeetUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs"
               >
                 <span>Join Google Meet Call</span>
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -989,7 +1006,7 @@ export default function AppHome() {
                   className="flex-1 py-2 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-semibold flex items-center justify-center gap-1 border border-amber-200 transition-colors"
                 >
                   <Calendar className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Calendar</span>
+                  <span>Add Calendar</span>
                 </a>
               </div>
             </div>
