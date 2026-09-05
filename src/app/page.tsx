@@ -336,6 +336,14 @@ export default function AppHome() {
     return `https://wa.me/919540329351?text=${encodeURIComponent(msg)}`;
   };
 
+  const generatePatientWhatsAppUrl = () => {
+    if (!confirmedBooking) return '#';
+    const cleanPhone = confirmedBooking.patientPhone.replace(/\D/g, '');
+    const phoneWithCountry = cleanPhone.startsWith('91') && cleanPhone.length === 12 ? cleanPhone : `91${cleanPhone.slice(-10)}`;
+    const msg = `✨ *Dr. Shafali Garg - ₹21 Consultation Confirmed* ✨\n\nDear *${confirmedBooking.patientName}*,\nYour 5-minute personal consultation is scheduled!\n\n🎫 *Booking ID:* ${confirmedBooking.bookingNumber}\n📅 *Date:* ${confirmedBooking.date}\n⏰ *Time Slot:* ${confirmedBooking.timeSlot} (IST)\n\n🔗 *Google Meet Link:*\n${confirmedMeetUrl}\n\n📌 *Instructions:* Please join the Google Meet link 2 minutes before your slot with clear questions ready.`;
+    return `https://wa.me/${phoneWithCountry}?text=${encodeURIComponent(msg)}`;
+  };
+
   return (
     <div className="min-h-screen bg-[#F7F2EA] text-slate-900 flex flex-col justify-between py-2 sm:py-6 px-2 sm:px-4">
       
@@ -978,6 +986,17 @@ export default function AppHome() {
               >
                 <MessageCircle className="w-4 h-4 fill-white" />
                 <span>Send Booking to Dr. Shafali on WhatsApp</span>
+              </a>
+
+              {/* 1-Click Save to Patient's Own WhatsApp */}
+              <a
+                href={generatePatientWhatsAppUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-semibold text-xs flex items-center justify-center gap-2 border border-emerald-300 transition-colors"
+              >
+                <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                <span>📲 Save Booking to My WhatsApp</span>
               </a>
 
               <a
