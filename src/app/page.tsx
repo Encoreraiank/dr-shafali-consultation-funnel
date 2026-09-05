@@ -971,35 +971,14 @@ export default function AppHome() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              {/* 1-Click WhatsApp Direct Alert to Doctor */}
-              <a
-                href={generateDoctorWhatsAppMessageUrl()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3 px-4 rounded-2xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition-all active:scale-95"
-              >
-                <MessageCircle className="w-4 h-4 fill-white" />
-                <span>Send Booking to Dr. Shafali on WhatsApp</span>
-              </a>
-
-              {/* 1-Click Save to Patient's Own WhatsApp */}
-              <a
-                href={generatePatientWhatsAppUrl()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-2.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-semibold text-xs flex items-center justify-center gap-2 border border-emerald-300 transition-colors"
-              >
-                <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-                <span>📲 Save Booking to My WhatsApp</span>
-              </a>
-
+            <div className="space-y-2.5">
               <a
                 href={confirmedMeetUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-colors shadow-md"
               >
+                <Video className="w-4 h-4" />
                 <span>Join Google Meet Call</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
@@ -1027,7 +1006,7 @@ export default function AppHome() {
 
             <p className="text-[10px] text-slate-500 flex items-center justify-center gap-1">
               <MessageCircle className="w-3 h-3 text-emerald-600" />
-              Dispatched to WhatsApp: <strong>{confirmedBooking.patientPhone}</strong>
+              Confirmation sent to: <strong>{confirmedBooking.patientPhone}</strong>
             </p>
 
             <button
