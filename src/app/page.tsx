@@ -222,7 +222,7 @@ export default function AppHome() {
   };
 
   const handleFinalizePayment = async () => {
-    if (!orderInfo) return;
+    if (!orderInfo || isProcessing) return;
     setIsProcessing(true);
     setErrorMsg('');
 
@@ -268,6 +268,29 @@ export default function AppHome() {
       setErrorMsg(err instanceof Error ? err.message : 'Payment confirmation failed. Please try again.');
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // Auto-confirm slot after opening UPI payment screen (after 8 seconds or when UPI app is launched)
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (checkoutStep === 'UPI_PAY' && orderInfo && isCheckoutOpen && !isPassOpen) {
+      timer = setTimeout(() => {
+        handleFinalizePayment();
+      }, 7000); // 7s auto-confirmation for seamless UX
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [checkoutStep, orderInfo, isCheckoutOpen, isPassOpen]);
+
+  const handleOpenUpiApp = () => {
+    if (orderInfo?.upiLink) {
+      // Trigger instant confirmation when user opens UPI App
+      window.location.href = orderInfo.upiLink;
+      setTimeout(() => {
+        handleFinalizePayment();
+      }, 3000);
     }
   };
 
@@ -795,20 +818,17 @@ export default function AppHome() {
                 </button>
               </form>
             ) : (
-              /* STEP 2: DIRECT UPI PAYMENT SCREEN */
+              /* STEP 2: DIRECT UPI PAYMENT SCREEN WITH AUTO-CONFIRMATION */
               <div className="space-y-3.5 text-xs text-center">
                 
                 {/* 1-Click Pay on Mobile */}
-                {orderInfo?.upiLink && (
-                  <a
-                    href={orderInfo.upiLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full py-3 px-4 rounded-2xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-bold text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 active:scale-95 transition-all"
-                  >
-                    <span>⚡ Open UPI App (GPay / PhonePe / Paytm)</span>
-                  </a>
-                )}
+                <button
+                  type="button"
+                  onClick={handleOpenUpiApp}
+                  className="w-full py-3.5 px-4 rounded-2xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-bold text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 active:scale-95 transition-all"
+                >
+                  <span>⚡ Open UPI App (GPay / PhonePe / Paytm)</span>
+                </button>
 
                 {/* QR Code Container */}
                 <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col items-center space-y-2">
@@ -816,20 +836,18 @@ export default function AppHome() {
                     Scan & Pay ₹21 with Any UPI App
                   </p>
                   
-                  {orderInfo?.qrUrl && (
-                    <div className="p-2 bg-white rounded-xl border border-slate-200 shadow-xs">
-                      <img
-                        src={orderInfo.qrUrl}
-                        alt="Dr. Shafali Garg UPI QR Code"
-                        className="w-40 h-40 object-contain mx-auto"
-                      />
-                    </div>
-                  )}
+                  <div className="p-2 bg-white rounded-2xl border border-slate-200 shadow-xs">
+                    <img
+                      src="/images/doctor_upi_qr.png"
+                      alt="Dr. Shafali Garg UPI QR Code (9540329351@ptsbi)"
+                      className="w-44 h-44 object-contain mx-auto rounded-xl"
+                    />
+                  </div>
 
                   {/* Copy UPI ID */}
                   <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs">
                     <span className="text-[11px] font-mono font-bold text-slate-700">
-                      {orderInfo?.upiId}
+                      {orderInfo?.upiId || '9540329351@ptsbi'}
                     </span>
                     <button
                       type="button"
@@ -841,40 +859,36 @@ export default function AppHome() {
                   </div>
                 </div>
 
+                {/* Animated Auto-Confirmation Status Indicator */}
+                <div className="flex items-center justify-center gap-2 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 py-3 px-4 rounded-2xl">
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-600 shrink-0" />
+                  <span>Waiting for payment... Automatically confirming your slot</span>
+                </div>
+
                 {errorMsg && (
                   <p className="text-xs text-rose-600 font-medium bg-rose-50 p-2.5 rounded-xl border border-rose-200">
                     {errorMsg}
                   </p>
                 )}
 
-                {/* Confirm Paid Button */}
-                <button
-                  type="button"
-                  onClick={handleFinalizePayment}
-                  disabled={isProcessing}
-                  className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 transition-all"
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Creating Your Google Meet Room...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>I Have Paid ₹21 • Confirm Slot</span>
-                    </>
-                  )}
-                </button>
+                {/* Quick Confirmation Fallback Link */}
+                <div className="flex items-center justify-between text-[11px] pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setCheckoutStep('DETAILS')}
+                    className="text-slate-500 hover:text-slate-800 font-semibold underline"
+                  >
+                    ← Edit Details
+                  </button>
 
-                {/* Back to Details */}
-                <button
-                  type="button"
-                  onClick={() => setCheckoutStep('DETAILS')}
-                  className="text-[11px] text-slate-500 hover:text-slate-800 font-semibold underline pt-1"
-                >
-                  ← Edit Name / Phone Number
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleFinalizePayment}
+                    className="text-emerald-700 hover:text-emerald-900 font-bold underline"
+                  >
+                    Paid already? Confirm instantly →
+                  </button>
+                </div>
 
               </div>
             )}

@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
     // Get current fee from settings (safe try-catch)
     let fee = 21;
-    let upiId = process.env.DOCTOR_UPI_ID || '9540329351@paytm';
+    let upiId = process.env.DOCTOR_UPI_ID || '9540329351@ptsbi';
 
     try {
       const settings = await prisma.adminSetting.findUnique({
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     });
 
     const upiLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent('Dr. Shafali Garg')}&am=${fee}&cu=INR&tn=${encodeURIComponent(`DSG Consultation ${bookingNumber}`)}`;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(upiLink)}`;
+    const qrUrl = `/images/doctor_upi_qr.png`;
 
     return NextResponse.json({
       success: true,
