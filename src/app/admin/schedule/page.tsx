@@ -22,7 +22,7 @@ export default function ScheduleManager() {
   const [slotDurationMin, setSlotDurationMin] = useState<number>(5);
   const [bufferTimeMin, setBufferTimeMin] = useState<number>(2);
   const [consultationFee, setConsultationFee] = useState<number>(21);
-  const [doctorEmail, setDoctorEmail] = useState<string>('drshafali.official@gmail.com');
+  const [doctorEmail, setDoctorEmail] = useState<string>('Shafaligarg@gmail.com');
   const [doctorPhone, setDoctorPhone] = useState<string>('+919540329351');
 
   // Block slots state

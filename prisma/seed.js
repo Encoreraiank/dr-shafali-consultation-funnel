@@ -18,7 +18,7 @@ async function main() {
       slotDurationMin: 5,
       bufferTimeMin: 2,
       consultationFee: 21,
-      doctorEmail: 'drshafali.official@gmail.com',
+      doctorEmail: 'Shafaligarg@gmail.com',
       doctorPhone: '+919540329351',
       autoGenerateMeet: true,
     },
