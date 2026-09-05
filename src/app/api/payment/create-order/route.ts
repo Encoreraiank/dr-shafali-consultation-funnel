@@ -58,8 +58,8 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const upiLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent('Dr. Shafali Garg')}&am=${fee}&cu=INR&tn=${encodeURIComponent(`DSG Consultation ${bookingNumber}`)}`;
-    const qrUrl = `/images/doctor_upi_qr.png`;
+    const upiLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent('Shafali Garg')}&am=${fee.toFixed(2)}&cu=INR&tn=${encodeURIComponent(`Consultation ${bookingNumber}`)}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=${encodeURIComponent(upiLink)}`;
 
     return NextResponse.json({
       success: true,

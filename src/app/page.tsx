@@ -236,6 +236,7 @@ export default function AppHome() {
           paymentId: utrNumber ? `upi_${utrNumber}` : `upi_pay_${Date.now()}`,
           signature: `sig_${Date.now()}`,
           paymentMethod: 'UPI',
+          amount: orderInfo.amount || 1,
           bookingNumber: orderInfo.bookingNumber,
           patientName: patientName.trim(),
           patientPhone: patientPhone.trim(),
@@ -265,32 +266,20 @@ export default function AppHome() {
       });
     } catch (err: unknown) {
       console.error(err);
-      setErrorMsg(err instanceof Error ? err.message : 'Payment confirmation failed. Please try again.');
+      setErrorMsg(err instanceof Error ? err.message : 'Payment confirmation failed. Please click Confirm Slot.');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Auto-confirm slot after opening UPI payment screen (after 8 seconds or when UPI app is launched)
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (checkoutStep === 'UPI_PAY' && orderInfo && isCheckoutOpen && !isPassOpen) {
-      timer = setTimeout(() => {
-        handleFinalizePayment();
-      }, 7000); // 7s auto-confirmation for seamless UX
-    }
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [checkoutStep, orderInfo, isCheckoutOpen, isPassOpen]);
-
   const handleOpenUpiApp = () => {
     if (orderInfo?.upiLink) {
-      // Trigger instant confirmation when user opens UPI App
+      // Launch UPI intent app with exact amount
       window.location.href = orderInfo.upiLink;
+      // Trigger confirmation after returning from UPI app
       setTimeout(() => {
         handleFinalizePayment();
-      }, 3000);
+      }, 4000);
     }
   };
 
@@ -844,17 +833,17 @@ export default function AppHome() {
                   <span>⚡ Open UPI App (GPay / PhonePe / Paytm)</span>
                 </button>
 
-                {/* QR Code Container */}
+                {/* QR Code Container with exact amount embedded */}
                 <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col items-center space-y-2">
                   <p className="text-[11px] font-bold text-slate-800">
-                    Scan & Pay ₹1 with Any UPI App
+                    Scan with Any UPI App (Auto-fills ₹{orderInfo?.amount || 1})
                   </p>
                   
                   <div className="p-2 bg-white rounded-2xl border border-slate-200 shadow-xs">
                     <img
-                      src="/images/doctor_upi_qr.png"
+                      src={orderInfo?.qrUrl || '/images/doctor_upi_qr.png'}
                       alt="Dr. Shafali Garg UPI QR Code (9540329351@ptsbi)"
-                      className="w-44 h-44 object-contain mx-auto rounded-xl"
+                      className="w-48 h-48 object-contain mx-auto rounded-xl"
                     />
                   </div>
 
@@ -873,11 +862,25 @@ export default function AppHome() {
                   </div>
                 </div>
 
-                {/* Animated Auto-Confirmation Status Indicator */}
-                <div className="flex items-center justify-center gap-2 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 py-3 px-4 rounded-2xl">
-                  <Loader2 className="w-4 h-4 animate-spin text-emerald-600 shrink-0" />
-                  <span>Waiting for payment... Automatically confirming your slot</span>
-                </div>
+                {/* Primary Confirm Button */}
+                <button
+                  type="button"
+                  disabled={isProcessing}
+                  onClick={handleFinalizePayment}
+                  className="w-full py-3.5 px-4 rounded-2xl bg-[#10B981] hover:bg-[#059669] text-white font-extrabold text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Confirming Your Slot...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>✅ I Have Paid ₹{orderInfo?.amount || 1} • Confirm My Slot</span>
+                    </>
+                  )}
+                </button>
 
                 {errorMsg && (
                   <p className="text-xs text-rose-600 font-medium bg-rose-50 p-2.5 rounded-xl border border-rose-200">
@@ -885,22 +888,14 @@ export default function AppHome() {
                   </p>
                 )}
 
-                {/* Quick Confirmation Fallback Link */}
-                <div className="flex items-center justify-between text-[11px] pt-1">
+                {/* Back to Edit Details Link */}
+                <div className="text-center text-[11px] pt-1">
                   <button
                     type="button"
                     onClick={() => setCheckoutStep('DETAILS')}
                     className="text-slate-500 hover:text-slate-800 font-semibold underline"
                   >
                     ← Edit Details
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleFinalizePayment}
-                    className="text-emerald-700 hover:text-emerald-900 font-bold underline"
-                  >
-                    Paid already? Confirm instantly →
                   </button>
                 </div>
 
