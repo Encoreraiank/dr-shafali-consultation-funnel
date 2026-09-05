@@ -73,7 +73,7 @@ export default function DoctorHeroSection({ onOpenDetails }: DoctorHeroSectionPr
                   Introductory Offer
                 </p>
                 <p className="text-3xl font-black text-[#E05E00] leading-none tracking-tight">
-                  ₹21
+                  ₹1
                 </p>
                 <p className="text-[11px] text-[#8A7D76] line-through font-medium leading-none mt-0.5">
                   ₹1,500
@@ -185,7 +185,7 @@ export default function DoctorHeroSection({ onOpenDetails }: DoctorHeroSectionPr
               Introductory Offer
             </p>
             <p className="text-2xl font-black text-[#E05E00] leading-none tracking-tight">
-              ₹21
+              ₹1
             </p>
             <p className="text-[10px] text-[#8A7D76] line-through font-medium leading-none mt-0.5">
               ₹1,500

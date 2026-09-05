@@ -205,10 +205,10 @@ export default function AppHome() {
       setOrderInfo({
         bookingNumber: orderData.bookingNumber,
         orderId: orderData.orderId,
-        amount: orderData.amount || 21,
-        upiId: orderData.upiId || '9540329351@paytm',
-        upiLink: orderData.upiLink || `upi://pay?pa=9540329351@paytm&pn=Dr%20Shafali%20Garg&am=21&cu=INR&tn=DSG%20Consultation`,
-        qrUrl: orderData.qrUrl || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=9540329351@paytm&pn=Dr%20Shafali%20Garg&am=21&cu=INR`,
+        amount: orderData.amount || 1,
+        upiId: orderData.upiId || '9540329351@ptsbi',
+        upiLink: orderData.upiLink || `upi://pay?pa=9540329351@ptsbi&pn=Dr%20Shafali%20Garg&am=1&cu=INR&tn=DSG%20Consultation`,
+        qrUrl: orderData.qrUrl || `/images/doctor_upi_qr.png`,
       });
 
       // Switch to UPI payment screen
@@ -332,7 +332,7 @@ export default function AppHome() {
 
   const generateDoctorWhatsAppMessageUrl = () => {
     if (!confirmedBooking) return '#';
-    const msg = `Namaste Dr. Shafali ji! 🙏\nI have booked a ₹21 Consultation with you.\n\n🎫 *Booking ID:* ${confirmedBooking.bookingNumber}\n👤 *Patient Name:* ${confirmedBooking.patientName}\n📱 *Phone:* ${confirmedBooking.patientPhone}\n📅 *Date:* ${confirmedBooking.date}\n⏰ *Time Slot:* ${confirmedBooking.timeSlot} (IST)\n🎯 *Topic:* ${confirmedBooking.problemCategory}\n📝 *My Query:* "${confirmedBooking.problemDetail || 'Consultation guidance'}"\n\n🔗 *Google Meet Link:*\n${confirmedMeetUrl}\n\nThank you!`;
+    const msg = `Namaste Dr. Shafali ji! 🙏\nI have booked a ₹${confirmedBooking.amount || 1} Consultation with you.\n\n🎫 *Booking ID:* ${confirmedBooking.bookingNumber}\n👤 *Patient Name:* ${confirmedBooking.patientName}\n📱 *Phone:* ${confirmedBooking.patientPhone}\n📅 *Date:* ${confirmedBooking.date}\n⏰ *Time Slot:* ${confirmedBooking.timeSlot} (IST)\n🎯 *Topic:* ${confirmedBooking.problemCategory}\n📝 *My Query:* "${confirmedBooking.problemDetail || 'Consultation guidance'}"\n\n🔗 *Google Meet Link:*\n${confirmedMeetUrl}\n\nThank you!`;
     return `https://wa.me/919540329351?text=${encodeURIComponent(msg)}`;
   };
 
@@ -340,7 +340,7 @@ export default function AppHome() {
     if (!confirmedBooking) return '#';
     const cleanPhone = confirmedBooking.patientPhone.replace(/\D/g, '');
     const phoneWithCountry = cleanPhone.startsWith('91') && cleanPhone.length === 12 ? cleanPhone : `91${cleanPhone.slice(-10)}`;
-    const msg = `✨ *Dr. Shafali Garg - ₹21 Consultation Confirmed* ✨\n\nDear *${confirmedBooking.patientName}*,\nYour 5-minute personal consultation is scheduled!\n\n🎫 *Booking ID:* ${confirmedBooking.bookingNumber}\n📅 *Date:* ${confirmedBooking.date}\n⏰ *Time Slot:* ${confirmedBooking.timeSlot} (IST)\n\n🔗 *Google Meet Link:*\n${confirmedMeetUrl}\n\n📌 *Instructions:* Please join the Google Meet link 2 minutes before your slot with clear questions ready.`;
+    const msg = `✨ *Dr. Shafali Garg - ₹${confirmedBooking.amount || 1} Consultation Confirmed* ✨\n\nDear *${confirmedBooking.patientName}*,\nYour 5-minute personal consultation is scheduled!\n\n🎫 *Booking ID:* ${confirmedBooking.bookingNumber}\n📅 *Date:* ${confirmedBooking.date}\n⏰ *Time Slot:* ${confirmedBooking.timeSlot} (IST)\n\n🔗 *Google Meet Link:*\n${confirmedMeetUrl}\n\n📌 *Instructions:* Please join the Google Meet link 2 minutes before your slot with clear questions ready.`;
     return `https://wa.me/${phoneWithCountry}?text=${encodeURIComponent(msg)}`;
   };
 
@@ -354,7 +354,7 @@ export default function AppHome() {
             SG
           </div>
           <span className="text-xs font-bold text-slate-800">
-            Dr. Shafali Garg • ₹21 Consultation Portal
+            Dr. Shafali Garg • ₹1 Consultation Portal
           </span>
         </div>
 
@@ -688,7 +688,7 @@ export default function AppHome() {
             <div className="shrink-0">
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl sm:text-4xl font-black text-[#FF6B00] leading-none tracking-tight">
-                  ₹21
+                  ₹1
                 </span>
                 <span className="text-xs sm:text-sm text-[#8A7D76] line-through font-medium leading-none">
                   ₹1,500
@@ -699,12 +699,12 @@ export default function AppHome() {
               </p>
             </div>
 
-            {/* Right: Book My ₹21 Consultation Button */}
+            {/* Right: Book My ₹1 Consultation Button */}
             <button
               onClick={() => setIsCheckoutOpen(true)}
               className="py-3.5 px-6 sm:px-8 rounded-2xl bg-[#FF6B00] hover:bg-[#E05E00] text-white font-bold text-sm sm:text-base shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 active:scale-95 transition-all shrink-0"
             >
-              <span>Book My ₹21 Consultation</span>
+              <span>Book My ₹1 Consultation</span>
               <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
             </button>
           </div>
@@ -757,7 +757,7 @@ export default function AppHome() {
                 <p className="text-[10px] text-[#FF6B00] font-semibold">🎯 {selectedTopic}</p>
               </div>
               <span className="text-sm font-extrabold text-[#FF6B00] bg-white px-2.5 py-1 rounded-xl border border-orange-200">
-                ₹21
+                ₹1
               </span>
             </div>
 
@@ -826,7 +826,7 @@ export default function AppHome() {
                   ) : (
                     <>
                       <Lock className="w-4 h-4" />
-                      <span>Proceed to UPI Payment (₹21) →</span>
+                      <span>Proceed to UPI Payment (₹1) →</span>
                     </>
                   )}
                 </button>
@@ -847,7 +847,7 @@ export default function AppHome() {
                 {/* QR Code Container */}
                 <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col items-center space-y-2">
                   <p className="text-[11px] font-bold text-slate-800">
-                    Scan & Pay ₹21 with Any UPI App
+                    Scan & Pay ₹1 with Any UPI App
                   </p>
                   
                   <div className="p-2 bg-white rounded-2xl border border-slate-200 shadow-xs">
@@ -923,7 +923,7 @@ export default function AppHome() {
                 <CheckCircle2 className="w-8 h-8" />
               </div>
               <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-0.5 rounded-full">
-                Booking Confirmed • ₹21 Paid
+                Booking Confirmed • ₹1 Paid
               </span>
               <h3 className="text-lg font-bold text-slate-900 mt-1">
                 Consultation Scheduled

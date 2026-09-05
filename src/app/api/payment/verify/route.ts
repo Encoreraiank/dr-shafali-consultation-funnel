@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
         timeSlot,
         startTime,
         endTime,
-        amount: 21,
+        amount: body.amount ? Number(body.amount) : (process.env.NEXT_PUBLIC_CONSULTATION_FEE ? Number(process.env.NEXT_PUBLIC_CONSULTATION_FEE) : 1),
         paymentStatus: 'PAID',
         paymentId,
         orderId,

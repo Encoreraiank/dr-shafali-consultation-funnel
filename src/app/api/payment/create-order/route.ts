@@ -28,8 +28,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get current fee from settings (safe try-catch)
-    let fee = 21;
+    // Get current fee from env or settings (defaults to 1 for test mode)
+    const envFee = process.env.NEXT_PUBLIC_CONSULTATION_FEE ? Number(process.env.NEXT_PUBLIC_CONSULTATION_FEE) : 1;
+    let fee = envFee || 1;
     let upiId = process.env.DOCTOR_UPI_ID || '9540329351@ptsbi';
 
     try {
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
         fee = settings.consultationFee;
       }
     } catch {
-      fee = 21;
+      fee = envFee || 1;
     }
 
     const bookingNumber = generateBookingNumber();
