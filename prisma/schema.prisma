@@ -19,7 +19,7 @@ model AdminSetting {
   bufferTimeMin     Int      @default(2)
   consultationFee   Int      @default(21)
   doctorEmail       String   @default("Shafaligarg@gmail.com")
-  doctorPhone       String   @default("+919540329351")
+  doctorPhone       String   @default("+919910112346")
   autoGenerateMeet  Boolean  @default(true)
   updatedAt         DateTime @updatedAt
 }

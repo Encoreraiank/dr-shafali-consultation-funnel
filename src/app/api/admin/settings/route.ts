@@ -20,7 +20,7 @@ export async function GET() {
           bufferTimeMin: 2,
           consultationFee: 21,
           doctorEmail: 'Shafaligarg@gmail.com',
-          doctorPhone: '+919540329351',
+          doctorPhone: '+919910112346',
           autoGenerateMeet: true,
         },
       });

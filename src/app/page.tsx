@@ -267,7 +267,7 @@ export default function AppHome() {
 
       // Automatically Open WhatsApp to Dr. Shafali with pre-filled ticket and Meet link
       const msg = `Namaste Dr. Shafali ji! 🙏\nI have booked a ₹${verifyData.booking.amount || 1} Consultation with you.\n\n🎫 *Booking ID:* ${verifyData.booking.bookingNumber}\n👤 *Patient Name:* ${verifyData.booking.patientName}\n📱 *Phone:* ${verifyData.booking.patientPhone}\n📅 *Date:* ${verifyData.booking.date}\n⏰ *Time Slot:* ${verifyData.booking.timeSlot} (IST)\n🎯 *Topic:* ${verifyData.booking.problemCategory}\n📝 *My Query:* "${verifyData.booking.problemDetail || 'Consultation guidance'}"\n\n🔗 *Google Meet Link for our Call:*\n${verifyData.meetUrl}\n\nThank you!`;
-      const waUrl = `https://wa.me/919540329351?text=${encodeURIComponent(msg)}`;
+      const waUrl = `https://wa.me/919910112346?text=${encodeURIComponent(msg)}`;
       window.open(waUrl, '_blank');
     } catch (err: unknown) {
       console.error(err);
@@ -327,7 +327,7 @@ export default function AppHome() {
   const generateDoctorWhatsAppMessageUrl = () => {
     if (!confirmedBooking) return '#';
     const msg = `Namaste Dr. Shafali ji! 🙏\nI have booked a ₹${confirmedBooking.amount || 1} Consultation with you.\n\n🎫 *Booking ID:* ${confirmedBooking.bookingNumber}\n👤 *Patient Name:* ${confirmedBooking.patientName}\n📱 *Phone:* ${confirmedBooking.patientPhone}\n📅 *Date:* ${confirmedBooking.date}\n⏰ *Time Slot:* ${confirmedBooking.timeSlot} (IST)\n🎯 *Topic:* ${confirmedBooking.problemCategory}\n📝 *My Query:* "${confirmedBooking.problemDetail || 'Consultation guidance'}"\n\n🔗 *Google Meet Link:*\n${confirmedMeetUrl}\n\nThank you!`;
-    return `https://wa.me/919540329351?text=${encodeURIComponent(msg)}`;
+    return `https://wa.me/919910112346?text=${encodeURIComponent(msg)}`;
   };
 
   const generatePatientWhatsAppUrl = () => {
