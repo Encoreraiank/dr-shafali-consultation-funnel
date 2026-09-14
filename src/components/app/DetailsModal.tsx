@@ -36,7 +36,7 @@ export default function DetailsModal({ isOpen, onClose }: DetailsModalProps) {
 
         <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
           <p>
-            Dr. Shafali Garg is a renowned <strong>Astrologer, Tarot Card Reader, Life Guide</strong> and <strong>Numerology Researcher</strong> with <strong>15+ years of experience</strong> and <strong>13,000+ consultations</strong> delivered.
+            Dr. Shafali Garg is a renowned <strong>Astrologer, Tarot Card Reader, Author, Life Guide</strong> and <strong>Numerology Researcher</strong> with <strong>15+ years of experience</strong> and <strong>13,000+ consultations</strong> delivered.
           </p>
 
           <div className="p-3 rounded-2xl bg-orange-50 border border-orange-100 text-orange-950 font-medium">
