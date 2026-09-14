@@ -28,9 +28,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get current fee from env or settings (defaults to 1 for test mode)
-    const envFee = process.env.NEXT_PUBLIC_CONSULTATION_FEE ? Number(process.env.NEXT_PUBLIC_CONSULTATION_FEE) : 1;
-    let fee = envFee || 1;
+    // Get current fee from env or settings (defaults to 21 for launch)
+    const envFee = process.env.NEXT_PUBLIC_CONSULTATION_FEE ? Number(process.env.NEXT_PUBLIC_CONSULTATION_FEE) : 21;
+    let fee = envFee || 21;
     let upiId = process.env.DOCTOR_UPI_ID || '9540329351@ptsbi';
 
     try {
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
         fee = settings.consultationFee;
       }
     } catch {
-      fee = envFee || 1;
+      fee = envFee || 21;
     }
 
     const bookingNumber = generateBookingNumber();

@@ -348,7 +348,7 @@ export default function AppHome() {
             SG
           </div>
           <span className="text-xs font-bold text-slate-800">
-            Dr. Shafali Garg • ₹1 Consultation Portal
+            Dr. Shafali Garg • ₹21 Consultation Portal
           </span>
         </div>
 
@@ -682,7 +682,7 @@ export default function AppHome() {
             <div className="shrink-0">
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl sm:text-4xl font-black text-[#FF6B00] leading-none tracking-tight">
-                  ₹1
+                  ₹21
                 </span>
                 <span className="text-xs sm:text-sm text-[#8A7D76] line-through font-medium leading-none">
                   ₹1,500
@@ -693,12 +693,12 @@ export default function AppHome() {
               </p>
             </div>
 
-            {/* Right: Book My ₹1 Consultation Button */}
+            {/* Right: Book My ₹21 Consultation Button */}
             <button
               onClick={() => setIsCheckoutOpen(true)}
               className="py-3.5 px-6 sm:px-8 rounded-2xl bg-[#FF6B00] hover:bg-[#E05E00] text-white font-bold text-sm sm:text-base shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 active:scale-95 transition-all shrink-0"
             >
-              <span>Book My ₹1 Consultation</span>
+              <span>Book My ₹21 Consultation</span>
               <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
             </button>
           </div>
@@ -751,7 +751,7 @@ export default function AppHome() {
                 <p className="text-[10px] text-[#FF6B00] font-semibold">🎯 {selectedTopic}</p>
               </div>
               <span className="text-sm font-extrabold text-[#FF6B00] bg-white px-2.5 py-1 rounded-xl border border-orange-200">
-                ₹1
+                ₹21
               </span>
             </div>
 
@@ -820,7 +820,7 @@ export default function AppHome() {
                   ) : (
                     <>
                       <Lock className="w-4 h-4" />
-                      <span>Proceed to UPI Payment (₹1) →</span>
+                      <span>Proceed to Book & Pay (₹21) →</span>
                     </>
                   )}
                 </button>
@@ -841,7 +841,7 @@ export default function AppHome() {
                 {/* QR Code Container with exact amount embedded */}
                 <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col items-center space-y-2">
                   <p className="text-[11px] font-bold text-slate-800">
-                    Scan with Any UPI App (Auto-fills ₹{orderInfo?.amount || 1})
+                    Scan with Any UPI App (Auto-fills ₹{orderInfo?.amount || 21})
                   </p>
                   
                   <div className="p-2 bg-white rounded-2xl border border-slate-200 shadow-xs">
@@ -923,7 +923,7 @@ export default function AppHome() {
                 <CheckCircle2 className="w-8 h-8" />
               </div>
               <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-0.5 rounded-full">
-                Booking Confirmed • ₹1 Paid
+                Booking Confirmed • ₹21 Paid
               </span>
               <h3 className="text-lg font-bold text-slate-900 mt-1">
                 Consultation Scheduled
