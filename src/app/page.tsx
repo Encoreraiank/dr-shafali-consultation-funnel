@@ -59,6 +59,7 @@ export default function AppHome() {
   } | null>(null);
   const [copiedUpi, setCopiedUpi] = useState<boolean>(false);
   const [utrNumber, setUtrNumber] = useState<string>('');
+  const [waRedirectUrl, setWaRedirectUrl] = useState<string>('');
 
   // Slots
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -184,7 +185,7 @@ export default function AppHome() {
     try {
       const sessionId = `sess_${Date.now()}`;
 
-      // 1. Create order & get UPI payment details
+      // 1. Create order & get unique booking number in backend
       const orderRes = await fetch('/api/payment/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -205,13 +206,30 @@ export default function AppHome() {
       setOrderInfo({
         bookingNumber: orderData.bookingNumber,
         orderId: orderData.orderId,
-        amount: orderData.amount || 1,
+        amount: orderData.amount || 21,
         upiId: orderData.upiId || '9540329351@ptsbi',
-        upiLink: orderData.upiLink || `upi://pay?pa=9540329351@ptsbi&pn=Dr%20Shafali%20Garg&am=1&cu=INR&tn=DSG%20Consultation`,
-        qrUrl: orderData.qrUrl || `/images/doctor_upi_qr.png`,
+        upiLink: orderData.upiLink || '',
+        qrUrl: orderData.qrUrl || '',
       });
 
-      // Switch to UPI payment screen
+      // 2. Prepare WhatsApp URL with pre-filled booking ticket
+      const formattedDate = selectedDate ? format(new Date(selectedDate), 'dd MMM yyyy') : selectedDate;
+      const msg = `Namaste Dr. Shafali ji! 🙏\nI want to book a ₹21 Consultation (5-Min 1-on-1 Call).\n\n🎫 *Booking ID:* ${orderData.bookingNumber}\n👤 *Patient Name:* ${patientName.trim()}\n📱 *Phone:* ${patientPhone.trim()}\n🎯 *Topic:* ${selectedTopic}\n📅 *Date:* ${formattedDate}\n⏰ *Time Slot:* ${selectedSlot} (IST)\n📝 *My Query:* "${problemDetail.trim() || 'Consultation guidance'}"\n\nMa'am, please confirm my consultation slot. Thank you!`;
+      const waUrl = `https://wa.me/919910112346?text=${encodeURIComponent(msg)}`;
+      setWaRedirectUrl(waUrl);
+
+      // Trigger Confetti celebration
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#FF6B00', '#FFB800', '#10B981'],
+      });
+
+      // Open WhatsApp directly in new tab / app
+      window.open(waUrl, '_blank');
+
+      // Switch to WhatsApp Sent Status Screen
       setCheckoutStep('UPI_PAY');
     } catch (err: unknown) {
       console.error(err);
@@ -820,88 +838,89 @@ export default function AppHome() {
                     </>
                   ) : (
                     <>
-                      <Lock className="w-4 h-4" />
-                      <span>Proceed to Book & Pay (₹21) →</span>
+                      <MessageCircle className="w-4 h-4 fill-white" />
+                      <span>Proceed to Book on WhatsApp (₹21) →</span>
                     </>
                   )}
                 </button>
               </form>
             ) : (
-              /* STEP 2: DIRECT UPI PAYMENT SCREEN WITH AUTO-CONFIRMATION */
-              <div className="space-y-3.5 text-xs text-center">
+              /* STEP 2: WHATSAPP DISPATCHED STATUS SCREEN */
+              <div className="space-y-4 text-xs text-center py-2">
                 
-                {/* 1-Click Pay on Mobile */}
-                <button
-                  type="button"
-                  onClick={handleOpenUpiApp}
-                  className="w-full py-3.5 px-4 rounded-2xl bg-[#0070BA] hover:bg-[#005ea6] text-white font-bold text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 active:scale-95 transition-all"
-                >
-                  <span>⚡ Open UPI App (GPay / PhonePe / Paytm)</span>
-                </button>
-
-                {/* QR Code Container with exact amount embedded */}
-                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col items-center space-y-2">
-                  <p className="text-[11px] font-bold text-slate-800">
-                    Scan with Any UPI App (Auto-fills ₹{orderInfo?.amount || 21})
+                <div className="flex flex-col items-center">
+                  <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-2 shadow-sm">
+                    <MessageCircle className="w-8 h-8 fill-emerald-600 text-white" />
+                  </div>
+                  <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-0.5 rounded-full">
+                    Booking Request Ready
+                  </span>
+                  <h3 className="text-base font-bold text-slate-900 mt-1">
+                    Opening WhatsApp to Book Slot
+                  </h3>
+                  <p className="text-xs text-slate-500 font-mono">
+                    ID: {orderInfo?.bookingNumber}
                   </p>
-                  
-                  <div className="p-2 bg-white rounded-2xl border border-slate-200 shadow-xs">
-                    <img
-                      src={orderInfo?.qrUrl || '/images/doctor_upi_qr.png'}
-                      alt="Dr. Shafali Garg UPI QR Code (9540329351@ptsbi)"
-                      className="w-48 h-48 object-contain mx-auto rounded-xl"
-                    />
+                </div>
+
+                {/* Booking Summary Box */}
+                <div className="p-3.5 rounded-2xl bg-[#FFF9F5] border border-[#FFE4D4] text-left space-y-2 text-xs">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-[#FFE4D4]">
+                    <span className="text-[10px] font-bold text-[#FF6B00] uppercase">Dr. Shafali Garg</span>
+                    <span className="text-xs font-black text-[#FF6B00]">₹21</span>
                   </div>
 
-                  {/* Copy UPI ID */}
-                  <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs">
-                    <span className="text-[11px] font-mono font-bold text-slate-700">
-                      {orderInfo?.upiId || '9540329351@ptsbi'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleCopyUpi}
-                      className="text-[10px] font-bold text-[#FF6B00] hover:text-[#E05E00] ml-1 flex items-center gap-0.5"
-                    >
-                      {copiedUpi ? 'Copied! ✓' : 'Copy'}
-                    </button>
+                  <div className="grid grid-cols-2 gap-2 text-slate-700">
+                    <div>
+                      <p className="text-[10px] text-slate-400">Date:</p>
+                      <p className="font-bold text-slate-900">
+                        {selectedDate ? format(new Date(selectedDate), 'dd MMM yyyy') : ''}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400">Time (IST):</p>
+                      <p className="font-bold text-emerald-700">{selectedSlot}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400">Patient:</p>
+                      <p className="font-medium text-slate-800 truncate">{patientName}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400">Topic:</p>
+                      <p className="font-medium text-[#FF6B00] truncate">{selectedTopic}</p>
+                    </div>
                   </div>
                 </div>
 
-                {/* Primary Confirm & WhatsApp Dispatch Button */}
-                <button
-                  type="button"
-                  disabled={isProcessing}
-                  onClick={handleFinalizePayment}
-                  className="w-full py-3.5 px-4 rounded-2xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-extrabold text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+                {/* Primary WhatsApp Button */}
+                <a
+                  href={waRedirectUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3.5 px-4 rounded-2xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-extrabold text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 active:scale-95 transition-all"
                 >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Confirming & Opening WhatsApp...</span>
-                    </>
-                  ) : (
-                    <>
-                      <MessageCircle className="w-4 h-4 fill-white" />
-                      <span>💬 Open WhatsApp with Booking Details & Meet Link →</span>
-                    </>
-                  )}
-                </button>
+                  <MessageCircle className="w-5 h-5 fill-white" />
+                  <span>💬 Open WhatsApp to Send Message →</span>
+                </a>
 
-                {errorMsg && (
-                  <p className="text-xs text-rose-600 font-medium bg-rose-50 p-2.5 rounded-xl border border-rose-200">
-                    {errorMsg}
-                  </p>
-                )}
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Agar WhatsApp apne aap nahi khula, toh upar diye button par click karein aur Dr. Shafali ko message send karein.
+                </p>
 
-                {/* Back to Edit Details Link */}
-                <div className="text-center text-[11px] pt-1">
+                <div className="flex items-center gap-2 pt-1">
                   <button
                     type="button"
                     onClick={() => setCheckoutStep('DETAILS')}
-                    className="text-slate-500 hover:text-slate-800 font-semibold underline"
+                    className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors"
                   >
                     ← Edit Details
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsCheckoutOpen(false)}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors"
+                  >
+                    Done
                   </button>
                 </div>
 
