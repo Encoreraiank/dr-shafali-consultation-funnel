@@ -97,10 +97,10 @@ export default function DoctorHeroSection({ onOpenDetails }: DoctorHeroSectionPr
           <button
             type="button"
             onClick={onOpenDetails}
-            className="mt-2.5 py-1 px-4 rounded-full bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold border border-slate-200 shadow-xs flex items-center gap-1.5 active:scale-95 transition-all"
+            className="mt-3 py-1.5 px-5 rounded-full bg-white hover:bg-orange-50 text-slate-800 text-xs font-bold border-2 border-orange-200 shadow-sm flex items-center gap-1.5 active:scale-95 transition-all hover:border-orange-400"
           >
-            <Info className="w-3.5 h-3.5 text-[#E05E00]" />
-            <span className="text-blue-600">Details</span>
+            <Info className="w-4 h-4 text-[#E05E00]" />
+            <span className="text-[#E05E00] font-bold">About Me</span>
           </button>
         </div>
 
@@ -153,10 +153,10 @@ export default function DoctorHeroSection({ onOpenDetails }: DoctorHeroSectionPr
             <button
               type="button"
               onClick={onOpenDetails}
-              className="mt-1 py-0.5 px-3 rounded-full bg-white hover:bg-slate-50 text-slate-700 text-[10px] font-bold border border-slate-200 shadow-xs flex items-center gap-1 active:scale-95 transition-all"
+              className="mt-1.5 py-1 px-3.5 rounded-full bg-white hover:bg-orange-50 text-slate-800 text-[11px] font-bold border border-orange-200 shadow-xs flex items-center gap-1 active:scale-95 transition-all"
             >
-              <Info className="w-3 h-3 text-[#E05E00]" />
-              <span className="text-blue-600">Details</span>
+              <Info className="w-3.5 h-3.5 text-[#E05E00]" />
+              <span className="text-[#E05E00] font-bold">About Me</span>
             </button>
           </div>
 
