@@ -265,8 +265,9 @@ export default function AppHome() {
         colors: ['#FF6B00', '#FFB800', '#10B981'],
       });
 
-      // Automatically Open WhatsApp to Dr. Shafali with pre-filled ticket and Meet link
-      const msg = `Namaste Dr. Shafali ji! 🙏\nI have booked a ₹${verifyData.booking.amount || 1} Consultation with you.\n\n🎫 *Booking ID:* ${verifyData.booking.bookingNumber}\n👤 *Patient Name:* ${verifyData.booking.patientName}\n📱 *Phone:* ${verifyData.booking.patientPhone}\n📅 *Date:* ${verifyData.booking.date}\n⏰ *Time Slot:* ${verifyData.booking.timeSlot} (IST)\n🎯 *Topic:* ${verifyData.booking.problemCategory}\n📝 *My Query:* "${verifyData.booking.problemDetail || 'Consultation guidance'}"\n\n🔗 *Google Meet Link for our Call:*\n${verifyData.meetUrl}\n\nThank you!`;
+      // Automatically Open WhatsApp to Dr. Shafali with pre-filled ticket
+      const formattedDate = verifyData.booking.date ? format(new Date(verifyData.booking.date), 'dd MMM yyyy') : verifyData.booking.date;
+      const msg = `Namaste Dr. Shafali ji! 🙏\nI have booked a ₹${verifyData.booking.amount || 21} Consultation (5-Min 1-on-1 Call).\n\n🎫 *Booking ID:* ${verifyData.booking.bookingNumber}\n👤 *Patient Name:* ${verifyData.booking.patientName}\n📱 *Phone:* ${verifyData.booking.patientPhone}\n🎯 *Topic:* ${verifyData.booking.problemCategory}\n📅 *Date:* ${formattedDate}\n⏰ *Time Slot:* ${verifyData.booking.timeSlot} (IST)\n📝 *My Query:* "${verifyData.booking.problemDetail || 'Consultation guidance'}"\n\n💳 *Payment Status:* Paid ₹21 to UPI (9540329351@ptsbi)\n📸 *Payment Screenshot:* (Attached)\n\nMa'am, please confirm and send the Google Meet call link. Thank you!`;
       const waUrl = `https://wa.me/919910112346?text=${encodeURIComponent(msg)}`;
       window.open(waUrl, '_blank');
     } catch (err: unknown) {
