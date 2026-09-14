@@ -214,7 +214,7 @@ export default function AppHome() {
 
       // 2. Prepare WhatsApp URL with pre-filled booking ticket
       const formattedDate = selectedDate ? format(new Date(selectedDate), 'dd MMM yyyy') : selectedDate;
-      const msg = `Namaste Dr. Shafali ji! 🙏\nI want to book a ₹21 Consultation (5-Min 1-on-1 Call).\n\n🎫 *Booking ID:* ${orderData.bookingNumber}\n👤 *Patient Name:* ${patientName.trim()}\n📱 *Phone:* ${patientPhone.trim()}\n🎯 *Topic:* ${selectedTopic}\n📅 *Date:* ${formattedDate}\n⏰ *Time Slot:* ${selectedSlot} (IST)\n📝 *My Query:* "${problemDetail.trim() || 'Consultation guidance'}"\n\nMa'am, please confirm my consultation slot. Thank you!`;
+      const msg = `Namaste Dr. Shafali ji! 🙏\nI want to book a ₹21 Consultation (5-Min 1-on-1 Call).\n\n🎫 *Booking ID:* ${orderData.bookingNumber}\n👤 *Name:* ${patientName.trim()}\n📱 *Phone:* ${patientPhone.trim()}\n🎯 *Topic:* ${selectedTopic}\n📅 *Date:* ${formattedDate}\n⏰ *Time Slot:* ${selectedSlot} (IST)\n📝 *My Query:* "${problemDetail.trim() || 'Consultation guidance'}"\n\nMa'am, please share the UPI / QR details to confirm my slot. Thank you!`;
       const waUrl = `https://wa.me/919910112346?text=${encodeURIComponent(msg)}`;
       setWaRedirectUrl(waUrl);
 
@@ -882,7 +882,7 @@ export default function AppHome() {
                       <p className="font-bold text-emerald-700">{selectedSlot}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-slate-400">Patient:</p>
+                      <p className="text-[10px] text-slate-400">Name:</p>
                       <p className="font-medium text-slate-800 truncate">{patientName}</p>
                     </div>
                     <div>
