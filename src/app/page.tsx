@@ -639,32 +639,29 @@ export default function AppHome() {
                 <Loader2 className="w-4 h-4 animate-spin text-[#FF6B00] mr-2" />
                 <span>Checking available slots...</span>
               </div>
-            ) : slots.length === 0 ? (
-              <div className="py-5 px-4 text-center bg-[#FFFBF5] rounded-2xl border border-orange-200/70 space-y-2">
-                <p className="text-xs font-semibold text-slate-700">
-                  All slots for {format(new Date(selectedDate), 'dd MMMM')} are completed or reserved.
+            ) : slots.filter((s) => s.isAvailable).length === 0 ? (
+              <div className="py-6 px-4 text-center bg-[#FFFBF5] rounded-2xl border border-orange-200/70 space-y-2">
+                <p className="text-xs font-bold text-slate-800">
+                  No slots currently open for {format(new Date(selectedDate), 'dd MMMM yyyy')}.
                 </p>
                 <p className="text-[11px] text-slate-500">
-                  Please select another date or tomorrow from the date slider above.
+                  Dr. Shafali is fully booked or on leave for this day. Please select tomorrow or another date from the slider above.
                 </p>
               </div>
             ) : (
               <div>
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                  {displayedSlots.map((slot) => {
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                  {(showAllSlots ? slots.filter((s) => s.isAvailable) : slots.filter((s) => s.isAvailable).slice(0, 12)).map((slot) => {
                     const isSelected = selectedSlot === slot.displayTime;
                     return (
                       <button
                         key={slot.id}
                         type="button"
-                        disabled={!slot.isAvailable}
                         onClick={() => setSelectedSlot(slot.displayTime)}
-                        className={`py-2.5 px-1.5 rounded-xl border text-xs font-semibold text-center transition-all ${
+                        className={`py-2.5 px-1.5 rounded-xl border text-xs font-bold text-center transition-all ${
                           isSelected
-                            ? 'bg-[#FF6B00] border-[#FF6B00] text-white shadow-sm font-bold'
-                            : slot.isAvailable
-                            ? 'bg-emerald-50/60 border-emerald-300 text-emerald-900 hover:border-emerald-500'
-                            : 'bg-slate-50 border-slate-100 text-slate-300 line-through cursor-not-allowed'
+                            ? 'bg-[#FF6B00] border-[#FF6B00] text-white shadow-sm scale-102'
+                            : 'bg-emerald-50/70 border-emerald-300 text-emerald-900 hover:border-emerald-500 active:scale-95'
                         }`}
                       >
                         {slot.startTime}
@@ -673,13 +670,13 @@ export default function AppHome() {
                   })}
                 </div>
 
-                {slots.length > 8 && (
+                {slots.filter((s) => s.isAvailable).length > 12 && (
                   <button
                     type="button"
                     onClick={() => setShowAllSlots(!showAllSlots)}
-                    className="w-full mt-2 text-center text-xs text-slate-500 hover:text-slate-800 font-semibold py-1.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center gap-1"
+                    className="w-full mt-2.5 text-center text-xs text-orange-700 hover:text-orange-900 font-bold py-2 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center gap-1 transition-colors"
                   >
-                    <span>{showAllSlots ? 'Show Less Slots' : 'View More Slots ⌄'}</span>
+                    <span>{showAllSlots ? 'Show Less Slots ⌃' : `View All ${slots.filter((s) => s.isAvailable).length} Available Slots ⌄`}</span>
                   </button>
                 )}
               </div>

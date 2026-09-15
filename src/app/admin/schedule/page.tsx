@@ -429,23 +429,34 @@ export default function SimpleScheduleManager() {
 
             <div>
               <h1 className="text-sm sm:text-base font-extrabold text-slate-900 font-serif">
-                Dr. Shafali Garg — Slot & Timing Control
+                Dr. Shafali Garg — Slot Control
               </h1>
               <p className="text-[10px] text-emerald-700 font-bold flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Live Site Connected {isSyncing ? '(Saving...)' : '(Ready)'}</span>
+                <span>{isSyncing ? '⚡ Live Site Par Save Ho Raha Hai...' : '✓ Live Site Se Connected'}</span>
               </p>
             </div>
           </div>
 
-          <button
-            onClick={() => fetchDateSlots(selectedDate)}
-            className="py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5"
-            title="Refresh"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingSlots || isSyncing ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <a
+              href="/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition-all"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>👁️ Live Site Dekhein</span>
+            </a>
+
+            <button
+              onClick={() => fetchDateSlots(selectedDate)}
+              className="py-1.5 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1"
+              title="Refresh"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingSlots || isSyncing ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
       </header>
 
