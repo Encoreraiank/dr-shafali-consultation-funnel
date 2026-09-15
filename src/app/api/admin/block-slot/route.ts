@@ -11,6 +11,19 @@ import {
 } from '@/lib/cloudStore';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+function getCurrentISTDate(): Date {
+  try {
+    const now = new Date();
+    const istString = now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+    return new Date(istString);
+  } catch {
+    return new Date();
+  }
+}
+
+const normalizeSlot = (s: string) => (s || '').replace(/\s+/g, ' ').trim().toUpperCase();
 
 export async function GET(req: NextRequest) {
   try {
@@ -37,7 +50,7 @@ export async function GET(req: NextRequest) {
     const blockedMap = new Map<string, typeof blockedEntries[0]>();
     blockedEntries.forEach((b) => {
       if (b.timeSlot) {
-        blockedMap.set(b.timeSlot, b);
+        blockedMap.set(normalizeSlot(b.timeSlot), b);
       }
     });
 
@@ -49,19 +62,24 @@ export async function GET(req: NextRequest) {
     const bookedMap = new Map<string, typeof bookings[0]>();
     bookings.forEach((b) => {
       if (b.timeSlot) {
-        bookedMap.set(b.timeSlot, b);
+        bookedMap.set(normalizeSlot(b.timeSlot), b);
       }
     });
 
     // Generate all slots for morning and evening
     const slotDuration = Number(settings.slotDurationMin) || 5;
-    const bufferTime = Number(settings.bufferTimeMin) || 2;
+    const bufferTime = Number(settings.bufferTimeMin) !== undefined ? Number(settings.bufferTimeMin) : 2;
     const stepMinutes = slotDuration + bufferTime;
 
     const timeRanges = [
       { start: settings.morningStart || '10:00', end: settings.morningEnd || '13:00', period: 'morning' as const },
       { start: settings.eveningStart || '17:00', end: settings.eveningEnd || '20:00', period: 'evening' as const },
     ];
+
+    const istNow = getCurrentISTDate();
+    const todayISTString = format(istNow, 'yyyy-MM-dd');
+    const isToday = date === todayISTString;
+    const currentISTTotalMinutes = istNow.getHours() * 60 + istNow.getMinutes();
 
     interface AdminSlotItem {
       id: string;
@@ -70,7 +88,8 @@ export async function GET(req: NextRequest) {
       endTime: string;
       displayTime: string;
       period: 'morning' | 'evening';
-      status: 'AVAILABLE' | 'BLOCKED' | 'BOOKED';
+      status: 'AVAILABLE' | 'BLOCKED' | 'BOOKED' | 'PAST';
+      isPast: boolean;
       blockId?: string;
       reason?: string;
       booking?: {
@@ -100,8 +119,16 @@ export async function GET(req: NextRequest) {
         const startTimeStr = format(currentSlotStart, 'hh:mm a');
         const endTimeStr = format(currentSlotEnd, 'hh:mm a');
         const displayTime = `${startTimeStr} - ${endTimeStr}`;
+        const normalizedDisplay = normalizeSlot(displayTime);
 
-        let status: 'AVAILABLE' | 'BLOCKED' | 'BOOKED' = 'AVAILABLE';
+        // Check if slot has already passed in IST for today
+        let isPast = false;
+        if (isToday) {
+          const slotStartMinutes = currentSlotStart.getHours() * 60 + currentSlotStart.getMinutes();
+          isPast = slotStartMinutes <= currentISTTotalMinutes + 5;
+        }
+
+        let status: 'AVAILABLE' | 'BLOCKED' | 'BOOKED' | 'PAST' = 'AVAILABLE';
         let blockId: string | undefined = undefined;
         let reason: string | undefined = undefined;
         let bookingData: AdminSlotItem['booking'] = undefined;
@@ -109,9 +136,9 @@ export async function GET(req: NextRequest) {
         if (isFullDayBlocked) {
           status = 'BLOCKED';
           reason = 'Entire day blocked by doctor';
-        } else if (bookedMap.has(displayTime)) {
+        } else if (bookedMap.has(normalizedDisplay)) {
           status = 'BOOKED';
-          const b = bookedMap.get(displayTime)!;
+          const b = bookedMap.get(normalizedDisplay)!;
           bookingData = {
             id: b.id,
             bookingNumber: b.bookingNumber,
@@ -124,11 +151,14 @@ export async function GET(req: NextRequest) {
             amount: b.amount,
             meetUrl: b.meetUrl,
           };
-        } else if (blockedMap.has(displayTime)) {
+        } else if (blockedMap.has(normalizedDisplay)) {
           status = 'BLOCKED';
-          const blk = blockedMap.get(displayTime)!;
+          const blk = blockedMap.get(normalizedDisplay)!;
           blockId = blk.id;
           reason = blk.reason || 'Turned OFF by doctor';
+        } else if (isPast) {
+          status = 'PAST';
+          reason = 'Time has passed';
         }
 
         generatedSlots.push({
@@ -139,6 +169,7 @@ export async function GET(req: NextRequest) {
           displayTime,
           period: range.period,
           status,
+          isPast,
           blockId,
           reason,
           booking: bookingData,
@@ -148,20 +179,32 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({
-      date,
-      isFullDayBlocked,
-      settings,
-      slots: generatedSlots,
-      blocked: blockedEntries,
-      bookings,
-      summary: {
-        total: generatedSlots.length,
-        available: generatedSlots.filter((s) => s.status === 'AVAILABLE').length,
-        blocked: generatedSlots.filter((s) => s.status === 'BLOCKED').length,
-        booked: generatedSlots.filter((s) => s.status === 'BOOKED').length,
+    return NextResponse.json(
+      {
+        date,
+        isFullDayBlocked,
+        currentTimeIST: format(istNow, 'hh:mm a'),
+        currentDateIST: todayISTString,
+        settings,
+        slots: generatedSlots,
+        blocked: blockedEntries,
+        bookings,
+        summary: {
+          total: generatedSlots.length,
+          available: generatedSlots.filter((s) => s.status === 'AVAILABLE').length,
+          blocked: generatedSlots.filter((s) => s.status === 'BLOCKED').length,
+          booked: generatedSlots.filter((s) => s.status === 'BOOKED').length,
+          past: generatedSlots.filter((s) => s.status === 'PAST').length,
+        },
       },
-    });
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0',
+          'CDN-Cache-Control': 'no-store',
+          'Vercel-CDN-Cache-Control': 'no-store',
+        },
+      }
+    );
   } catch (error) {
     console.error('Error in GET /api/admin/block-slot:', error);
     return NextResponse.json({ error: 'Failed to fetch schedule data' }, { status: 500 });

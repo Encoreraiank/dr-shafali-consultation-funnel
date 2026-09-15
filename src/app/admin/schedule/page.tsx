@@ -21,7 +21,8 @@ import {
   ArrowLeft,
   Loader2,
   Check,
-  RotateCcw
+  RotateCcw,
+  Info
 } from 'lucide-react';
 import Link from 'next/link';
 import { format, addDays, parseISO } from 'date-fns';
@@ -33,7 +34,8 @@ interface SlotData {
   endTime: string;
   displayTime: string;
   period: 'morning' | 'evening';
-  status: 'AVAILABLE' | 'BLOCKED' | 'BOOKED';
+  status: 'AVAILABLE' | 'BLOCKED' | 'BOOKED' | 'PAST';
+  isPast?: boolean;
   blockId?: string;
   reason?: string;
   booking?: {
@@ -50,12 +52,44 @@ interface SlotData {
   };
 }
 
+interface SummaryData {
+  total: number;
+  available: number;
+  blocked: number;
+  booked: number;
+  past: number;
+}
+
 export default function SimpleScheduleManager() {
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [passwordInput, setPasswordInput] = useState<string>('');
   const [authError, setAuthError] = useState<string>('');
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(false);
+
+  // Live IST Clock
+  const [liveClockIST, setLiveClockIST] = useState<string>('');
+
+  useEffect(() => {
+    const updateTime = () => {
+      try {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('en-US', {
+          timeZone: 'Asia/Kolkata',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        });
+        setLiveClockIST(timeStr);
+      } catch {
+        setLiveClockIST(format(new Date(), 'hh:mm:ss a'));
+      }
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Active Tab: 'SLOTS' (Slot ON/OFF) or 'TIMINGS' (Change Hours)
   const [activeTab, setActiveTab] = useState<'SLOTS' | 'TIMINGS'>('SLOTS');
@@ -66,6 +100,7 @@ export default function SimpleScheduleManager() {
 
   // Slots State
   const [slots, setSlots] = useState<SlotData[]>([]);
+  const [summary, setSummary] = useState<SummaryData>({ total: 0, available: 0, blocked: 0, booked: 0, past: 0 });
   const [isFullDayBlocked, setIsFullDayBlocked] = useState<boolean>(false);
   const [isLoadingSlots, setIsLoadingSlots] = useState<boolean>(true);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -122,7 +157,7 @@ export default function SimpleScheduleManager() {
     setToastMessage({ text, type });
     setTimeout(() => {
       setToastMessage(null);
-    }, 3000);
+    }, 3200);
   };
 
   // Check login on load
@@ -159,14 +194,31 @@ export default function SimpleScheduleManager() {
     try {
       const res = await fetch(`/api/admin/block-slot?date=${date}&_t=${Date.now()}`, {
         cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache, no-store' },
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
       });
       const data = await res.json();
       if (res.ok) {
-        setSlots(data.slots || []);
-        slotsRef.current = data.slots || [];
+        const slotsData: SlotData[] = data.slots || [];
+        setSlots(slotsData);
+        slotsRef.current = slotsData;
         setIsFullDayBlocked(data.isFullDayBlocked || false);
         isFullDayBlockedRef.current = data.isFullDayBlocked || false;
+        
+        if (data.summary) {
+          setSummary(data.summary);
+        } else {
+          setSummary({
+            total: slotsData.length,
+            available: slotsData.filter((s) => s.status === 'AVAILABLE').length,
+            blocked: slotsData.filter((s) => s.status === 'BLOCKED').length,
+            booked: slotsData.filter((s) => s.status === 'BOOKED').length,
+            past: slotsData.filter((s) => s.status === 'PAST').length,
+          });
+        }
+
         if (data.settings) {
           if (data.settings.morningStart) setMorningStart(data.settings.morningStart);
           if (data.settings.morningEnd) setMorningEnd(data.settings.morningEnd);
@@ -224,11 +276,16 @@ export default function SimpleScheduleManager() {
       } finally {
         setIsSyncing(false);
       }
-    }, 300); // 300ms debounce batches rapid clicks perfectly
+    }, 250);
   }, []);
 
   // 1-Click Slot Toggle (Uses functional setState to NEVER lose clicks)
   const handleToggleSlot = (clickedSlot: SlotData) => {
+    if (clickedSlot.status === 'PAST' || clickedSlot.isPast) {
+      showToast('Yeh time nikal chuka hai (Past Slot)! Isse change nahi kiya ja sakta.', 'error');
+      return;
+    }
+
     if (clickedSlot.status === 'BOOKED') {
       setSelectedBookingSlot(clickedSlot);
       return;
@@ -244,6 +301,16 @@ export default function SimpleScheduleManager() {
       });
 
       slotsRef.current = updatedSlots;
+      
+      // Recalculate summary live
+      setSummary({
+        total: updatedSlots.length,
+        available: updatedSlots.filter((s) => s.status === 'AVAILABLE').length,
+        blocked: updatedSlots.filter((s) => s.status === 'BLOCKED').length,
+        booked: updatedSlots.filter((s) => s.status === 'BOOKED').length,
+        past: updatedSlots.filter((s) => s.status === 'PAST').length,
+      });
+
       syncBlocksToServer(selectedDate, updatedSlots, isFullDayBlockedRef.current);
       return updatedSlots;
     });
@@ -256,14 +323,26 @@ export default function SimpleScheduleManager() {
     isFullDayBlockedRef.current = nextFullDayBlocked;
 
     setSlots((prevSlots) => {
-      const updatedSlots: SlotData[] = prevSlots.map((s) => ({
-        ...s,
-        status: nextFullDayBlocked
-          ? (s.status === 'BOOKED' ? 'BOOKED' : 'BLOCKED')
-          : (s.status === 'BOOKED' ? 'BOOKED' : 'AVAILABLE'),
-      }));
+      const updatedSlots: SlotData[] = prevSlots.map((s) => {
+        if (s.status === 'PAST' || s.isPast || s.status === 'BOOKED') {
+          return s; // keep past and booked as is
+        }
+        return {
+          ...s,
+          status: nextFullDayBlocked ? 'BLOCKED' : 'AVAILABLE',
+        };
+      });
 
       slotsRef.current = updatedSlots;
+
+      setSummary({
+        total: updatedSlots.length,
+        available: updatedSlots.filter((s) => s.status === 'AVAILABLE').length,
+        blocked: updatedSlots.filter((s) => s.status === 'BLOCKED').length,
+        booked: updatedSlots.filter((s) => s.status === 'BOOKED').length,
+        past: updatedSlots.filter((s) => s.status === 'PAST').length,
+      });
+
       syncBlocksToServer(selectedDate, updatedSlots, nextFullDayBlocked);
       return updatedSlots;
     });
@@ -278,7 +357,7 @@ export default function SimpleScheduleManager() {
     setSlotDurationMin(5);
     setBufferTimeMin(2);
     setWorkingDays(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']);
-    showToast('Standard Timings apply ho gayi hain! Ab neeche "Save" button dabayein.');
+    showToast('Standard Timings (10am-1pm & 5pm-8pm) set ho gayi hain! Ab neeche "Save" button dabayein.');
   };
 
   // Save Doctor Shift Timings
@@ -454,10 +533,17 @@ export default function SimpleScheduleManager() {
               <h1 className="text-sm sm:text-base font-extrabold text-slate-900 font-serif">
                 Dr. Shafali Garg — Slot Control
               </h1>
-              <p className="text-[10px] text-emerald-700 font-bold flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>{isSyncing ? '⚡ Live Site Par Save Ho Raha Hai...' : '✓ Live Site Se Connected'}</span>
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] text-emerald-700 font-bold flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span>{isSyncing ? '⚡ Live Site Par Save Ho Raha Hai...' : '✓ Live Site Se Connected'}</span>
+                </p>
+                {liveClockIST && (
+                  <span className="hidden sm:inline text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                    🕒 IST: {liveClockIST}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -469,13 +555,13 @@ export default function SimpleScheduleManager() {
               className="py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition-all"
             >
               <ExternalLink className="w-3.5 h-3.5" />
-              <span>👁️ Live Site Dekhein</span>
+              <span className="hidden xs:inline sm:inline">👁️ Live Site Dekhein</span>
             </a>
 
             <button
               onClick={() => fetchDateSlots(selectedDate)}
               className="py-1.5 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1"
-              title="Refresh"
+              title="Refresh Slots"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoadingSlots || isSyncing ? 'animate-spin' : ''}`} />
             </button>
@@ -527,7 +613,14 @@ export default function SimpleScheduleManager() {
             <div className="bg-white rounded-3xl border border-orange-200 p-4 sm:p-5 shadow-xs space-y-3">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <div>
-                  <span className="text-[10px] font-extrabold text-orange-600 uppercase">Tarikh Chunein (Date)</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-extrabold text-orange-600 uppercase">Tarikh Chunein (Date)</span>
+                    {liveClockIST && (
+                      <span className="text-[10px] font-bold text-slate-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full sm:hidden">
+                        🕒 {liveClockIST}
+                      </span>
+                    )}
+                  </div>
                   <h3 className="text-base font-extrabold text-slate-900">
                     {selectedDate ? format(parseISO(selectedDate), 'EEEE, dd MMMM yyyy') : ''}
                   </h3>
@@ -612,21 +705,34 @@ export default function SimpleScheduleManager() {
               </button>
             </div>
 
-            {/* 3. Instructions Guide */}
+            {/* 3. Slot Stats Summary & Guide */}
             <div className="bg-white p-3.5 rounded-2xl border border-orange-200 text-xs flex flex-wrap items-center justify-between gap-2 shadow-xs">
-              <span className="font-extrabold text-slate-800">
-                👇 Kisi bhi slot par click karke ON ya OFF karein:
-              </span>
-              <div className="flex items-center gap-3">
-                <span className="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
-                  🟢 Green = Chalu (ON)
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-slate-800">
+                  {selectedDate === todayStr ? '📅 Aaj Ka Status:' : '📅 Selected Date Status:'}
                 </span>
-                <span className="font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-200">
-                  🔴 Red = Band (OFF)
+                <span className="bg-slate-100 px-2 py-0.5 rounded-md font-bold text-slate-700 text-[11px]">
+                  Total: {summary.total}
                 </span>
-                <span className="font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-200">
-                  🔵 Blue = Patient Booked
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200 text-[11px]">
+                  🟢 {summary.available} Open (ON)
                 </span>
+                <span className="font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-200 text-[11px]">
+                  🔴 {summary.blocked} Band (OFF)
+                </span>
+                {summary.booked > 0 && (
+                  <span className="font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-200 text-[11px]">
+                    🔵 {summary.booked} Booked
+                  </span>
+                )}
+                {summary.past > 0 && (
+                  <span className="font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-300 text-[11px]">
+                    ⏱️ {summary.past} Passed
+                  </span>
+                )}
               </div>
             </div>
 
@@ -674,9 +780,30 @@ export default function SimpleScheduleManager() {
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
                     {morningSlots.map((slot) => {
+                      const isPast = slot.status === 'PAST' || Boolean(slot.isPast);
                       const isAvail = slot.status === 'AVAILABLE';
                       const isBlk = slot.status === 'BLOCKED';
                       const isBkd = slot.status === 'BOOKED';
+
+                      if (isPast) {
+                        return (
+                          <div
+                            key={slot.id}
+                            className="p-3 rounded-2xl border border-slate-200 bg-slate-100 text-slate-400 flex flex-col justify-between min-h-[75px] opacity-75 cursor-not-allowed select-none"
+                            title="Yeh samay nikal chuka hai (Past slot)"
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <span className="text-xs font-bold line-through text-slate-400">{slot.startTime}</span>
+                              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-slate-300 text-slate-600 uppercase">
+                                ⏱️ PASSED
+                              </span>
+                            </div>
+                            <div className="mt-1 text-[10px] font-semibold text-slate-400 truncate">
+                              Time nikal gaya
+                            </div>
+                          </div>
+                        );
+                      }
 
                       return (
                         <button
@@ -737,9 +864,30 @@ export default function SimpleScheduleManager() {
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
                     {eveningSlots.map((slot) => {
+                      const isPast = slot.status === 'PAST' || Boolean(slot.isPast);
                       const isAvail = slot.status === 'AVAILABLE';
                       const isBlk = slot.status === 'BLOCKED';
                       const isBkd = slot.status === 'BOOKED';
+
+                      if (isPast) {
+                        return (
+                          <div
+                            key={slot.id}
+                            className="p-3 rounded-2xl border border-slate-200 bg-slate-100 text-slate-400 flex flex-col justify-between min-h-[75px] opacity-75 cursor-not-allowed select-none"
+                            title="Yeh samay nikal chuka hai (Past slot)"
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <span className="text-xs font-bold line-through text-slate-400">{slot.startTime}</span>
+                              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-slate-300 text-slate-600 uppercase">
+                                ⏱️ PASSED
+                              </span>
+                            </div>
+                            <div className="mt-1 text-[10px] font-semibold text-slate-400 truncate">
+                              Time nikal gaya
+                            </div>
+                          </div>
+                        );
+                      }
 
                       return (
                         <button
