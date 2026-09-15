@@ -249,22 +249,22 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link
               href="/admin/schedule"
-              className="py-1.5 px-3 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-800 text-xs font-semibold flex items-center gap-1.5 border border-orange-200 transition-colors"
+              className="py-2 px-3 sm:px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
             >
-              <Settings className="w-3.5 h-3.5 text-orange-600" />
-              <span>Availability & Schedule</span>
+              <Clock className="w-4 h-4" />
+              <span>Manage Slots (ON / OFF)</span>
             </Link>
 
             <a
               href="/api/admin/export"
               download
-              className="py-1.5 px-3 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold flex items-center gap-1.5 border border-emerald-300 transition-colors"
+              className="py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold flex items-center gap-1.5 border border-emerald-300 transition-colors"
             >
               <Download className="w-3.5 h-3.5 text-emerald-600" />
-              <span className="hidden sm:inline">Export Leads CSV</span>
+              <span className="hidden sm:inline">Export Leads</span>
             </a>
 
             <button

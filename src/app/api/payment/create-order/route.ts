@@ -28,6 +28,44 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 1. Check if whole day or this slot is blocked by admin
+    try {
+      const isBlocked = await prisma.blockedSlot.findFirst({
+        where: {
+          date,
+          OR: [
+            { timeSlot: null },
+            { timeSlot: timeSlot },
+          ],
+        },
+      });
+
+      if (isBlocked) {
+        return NextResponse.json(
+          { error: 'This time slot is marked as unavailable. Please choose another slot.' },
+          { status: 409 }
+        );
+      }
+
+      // 2. Check if already booked
+      const isBooked = await prisma.booking.findFirst({
+        where: {
+          date,
+          timeSlot,
+          status: { in: ['CONFIRMED', 'PENDING'] },
+        },
+      });
+
+      if (isBooked) {
+        return NextResponse.json(
+          { error: 'This time slot was just booked by another user. Please choose another slot.' },
+          { status: 409 }
+        );
+      }
+    } catch (err) {
+      console.error('Error checking slot collision:', err);
+    }
+
     // Get current fee from env or settings (defaults to 21 for launch)
     const envFee = process.env.NEXT_PUBLIC_CONSULTATION_FEE ? Number(process.env.NEXT_PUBLIC_CONSULTATION_FEE) : 21;
     let fee = envFee || 21;
@@ -45,6 +83,46 @@ export async function POST(req: NextRequest) {
     }
 
     const bookingNumber = generateBookingNumber();
+
+    // Parse start and end time
+    let startTime = new Date();
+    let endTime = new Date();
+    try {
+      const [startStr, endStr] = (timeSlot || '').split(' - ');
+      if (startStr && endStr) {
+        const { parse } = await import('date-fns');
+        startTime = parse(`${date} ${startStr.trim()}`, 'yyyy-MM-dd hh:mm a', new Date());
+        endTime = parse(`${date} ${endStr.trim()}`, 'yyyy-MM-dd hh:mm a', new Date());
+      }
+    } catch {
+      startTime = new Date(date);
+      endTime = new Date(date);
+    }
+
+    // Persist booking in database so the slot is instantly turned OFF for other users
+    try {
+      await prisma.booking.create({
+        data: {
+          bookingNumber,
+          patientName: patientName.trim(),
+          patientPhone: patientPhone.trim(),
+          patientEmail: patientEmail?.trim() || null,
+          problemCategory: problemCategory || 'General Guidance',
+          problemDetail: problemDetail?.trim() || `${problemCategory || 'General'} consultation guidance`,
+          date,
+          timeSlot,
+          startTime,
+          endTime,
+          amount: fee,
+          paymentStatus: 'PAID',
+          paymentMethod: 'UPI',
+          status: 'CONFIRMED',
+          meetUrl: 'https://meet.google.com/zvc-aaww-mpo',
+        },
+      });
+    } catch (dbErr) {
+      console.error('Failed to persist booking:', dbErr);
+    }
 
     const order = await createPaymentOrder({
       amount: fee,
