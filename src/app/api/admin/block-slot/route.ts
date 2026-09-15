@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { format, parse, addMinutes, isBefore, isAfter } from 'date-fns';
+import {
+  getCloudStore,
+  toggleSlotInStore,
+  toggleDayInStore,
+  cancelBookingInStore,
+  updateStoreSettings,
+} from '@/lib/cloudStore';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,51 +16,23 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const dateParam = searchParams.get('date');
 
+    const cloudStore = await getCloudStore();
+
     // If no date is passed, return simple list of all blocked slots
     if (!dateParam) {
-      const blocked = await prisma.blockedSlot.findMany({
-        orderBy: { date: 'desc' },
+      return NextResponse.json({
+        blocked: cloudStore.blockedSlots,
+        settings: cloudStore.settings,
       });
-      return NextResponse.json({ blocked });
     }
 
     const date = dateParam;
+    const settings = cloudStore.settings;
 
-    // 1. Fetch settings for slot generation
-    let settings = {
-      morningStart: '10:00',
-      morningEnd: '13:00',
-      eveningStart: '17:00',
-      eveningEnd: '20:00',
-      slotDurationMin: 5,
-      bufferTimeMin: 2,
-    };
-
-    try {
-      const dbSettings = await prisma.adminSetting.findUnique({
-        where: { id: 'default' },
-      });
-      if (dbSettings) {
-        settings = {
-          morningStart: dbSettings.morningStart || '10:00',
-          morningEnd: dbSettings.morningEnd || '13:00',
-          eveningStart: dbSettings.eveningStart || '17:00',
-          eveningEnd: dbSettings.eveningEnd || '20:00',
-          slotDurationMin: dbSettings.slotDurationMin || 5,
-          bufferTimeMin: dbSettings.bufferTimeMin || 2,
-        };
-      }
-    } catch (err) {
-      console.error('Error fetching admin settings:', err);
-    }
-
-    // 2. Fetch blocked slots for this date
-    const blockedEntries = await prisma.blockedSlot.findMany({
-      where: { date },
-      orderBy: { createdAt: 'desc' },
-    });
-
+    // Blocked slots for this date from Cloud Store
+    const blockedEntries = cloudStore.blockedSlots.filter((b) => b.date === date);
     const isFullDayBlocked = blockedEntries.some((b) => !b.timeSlot);
+
     const blockedMap = new Map<string, typeof blockedEntries[0]>();
     blockedEntries.forEach((b) => {
       if (b.timeSlot) {
@@ -61,14 +40,28 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    // 3. Fetch bookings for this date
-    const bookings = await prisma.booking.findMany({
-      where: {
-        date,
-        status: { in: ['CONFIRMED', 'PENDING', 'COMPLETED'] },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    // Also check local DB if available
+    try {
+      const localBlocked = await prisma.blockedSlot.findMany({ where: { date } });
+      localBlocked.forEach((b) => {
+        if (b.timeSlot && !blockedMap.has(b.timeSlot)) {
+          blockedMap.set(b.timeSlot, {
+            id: b.id,
+            date: b.date,
+            timeSlot: b.timeSlot,
+            reason: b.reason || 'Blocked',
+            createdAt: b.createdAt.toISOString(),
+          });
+        }
+      });
+    } catch {
+      // Ignore local DB error
+    }
+
+    // Bookings for this date
+    const bookings = cloudStore.bookings.filter(
+      (b) => b.date === date && b.status !== 'CANCELLED'
+    );
 
     const bookedMap = new Map<string, typeof bookings[0]>();
     bookings.forEach((b) => {
@@ -77,14 +70,41 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    // 4. Generate all slots for morning and evening
-    const slotDuration = settings.slotDurationMin;
-    const bufferTime = settings.bufferTimeMin;
+    try {
+      const localBookings = await prisma.booking.findMany({
+        where: { date, status: { in: ['CONFIRMED', 'PENDING'] } },
+      });
+      localBookings.forEach((b) => {
+        if (b.timeSlot && !bookedMap.has(b.timeSlot)) {
+          bookedMap.set(b.timeSlot, {
+            id: b.id,
+            bookingNumber: b.bookingNumber,
+            patientName: b.patientName,
+            patientPhone: b.patientPhone,
+            patientEmail: b.patientEmail,
+            problemCategory: b.problemCategory,
+            problemDetail: b.problemDetail,
+            date: b.date,
+            timeSlot: b.timeSlot,
+            amount: b.amount,
+            status: b.status as 'CONFIRMED',
+            meetUrl: b.meetUrl,
+            createdAt: b.createdAt.toISOString(),
+          });
+        }
+      });
+    } catch {
+      // Ignore local DB error
+    }
+
+    // Generate all slots for morning and evening
+    const slotDuration = Number(settings.slotDurationMin) || 5;
+    const bufferTime = Number(settings.bufferTimeMin) || 2;
     const stepMinutes = slotDuration + bufferTime;
 
     const timeRanges = [
-      { start: settings.morningStart, end: settings.morningEnd, period: 'morning' as const, label: '🌅 Morning Shift' },
-      { start: settings.eveningStart, end: settings.eveningEnd, period: 'evening' as const, label: '🌆 Evening Shift' },
+      { start: settings.morningStart || '10:00', end: settings.morningEnd || '13:00', period: 'morning' as const },
+      { start: settings.eveningStart || '17:00', end: settings.eveningEnd || '20:00', period: 'evening' as const },
     ];
 
     interface AdminSlotItem {
@@ -175,6 +195,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       date,
       isFullDayBlocked,
+      settings,
       slots: generatedSlots,
       blocked: blockedEntries,
       bookings,
@@ -194,84 +215,66 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { action, date, timeSlot, reason, bookingId } = body;
+    const { action, date, timeSlot, reason, bookingId, settings } = body;
 
     // Action 1: Toggle single slot ON / OFF
     if (action === 'TOGGLE_SLOT') {
       if (!date || !timeSlot) {
-        return NextResponse.json({ error: 'Date and timeSlot are required for TOGGLE_SLOT' }, { status: 400 });
+        return NextResponse.json({ error: 'Date and timeSlot are required' }, { status: 400 });
       }
 
-      // Check if slot is already blocked
-      const existingBlock = await prisma.blockedSlot.findFirst({
-        where: { date, timeSlot },
+      const result = await toggleSlotInStore(date, timeSlot, reason);
+
+      // Also sync to local DB if possible
+      try {
+        if (result.action === 'UNBLOCKED') {
+          await prisma.blockedSlot.deleteMany({ where: { date, timeSlot } });
+        } else {
+          await prisma.blockedSlot.create({
+            data: { date, timeSlot, reason: reason || 'Turned OFF by doctor' },
+          });
+        }
+      } catch {
+        // Ignore local DB error
+      }
+
+      return NextResponse.json({
+        success: true,
+        action: result.action,
+        message: result.action === 'UNBLOCKED'
+          ? `Slot ${timeSlot} चालू (ON) कर दिया गया है`
+          : `Slot ${timeSlot} बंद (OFF) कर दिया गया है`,
       });
-
-      if (existingBlock) {
-        // Slot is blocked -> UNBLOCK IT (Turn ON)
-        await prisma.blockedSlot.delete({
-          where: { id: existingBlock.id },
-        });
-        return NextResponse.json({
-          success: true,
-          action: 'UNBLOCKED',
-          message: `Slot ${timeSlot} is now turned ON (Open for booking)`,
-        });
-      } else {
-        // Slot is open -> BLOCK IT (Turn OFF)
-        const newBlock = await prisma.blockedSlot.create({
-          data: {
-            date,
-            timeSlot,
-            reason: reason || 'Turned OFF by doctor',
-          },
-        });
-        return NextResponse.json({
-          success: true,
-          action: 'BLOCKED',
-          blockId: newBlock.id,
-          message: `Slot ${timeSlot} is now turned OFF (Blocked from public)`,
-        });
-      }
     }
 
     // Action 2: Toggle entire day ON / OFF
     if (action === 'TOGGLE_DAY') {
       if (!date) {
-        return NextResponse.json({ error: 'Date is required for TOGGLE_DAY' }, { status: 400 });
+        return NextResponse.json({ error: 'Date is required' }, { status: 400 });
       }
 
-      const existingDayBlock = await prisma.blockedSlot.findFirst({
-        where: { date, timeSlot: null },
+      const result = await toggleDayInStore(date, reason);
+
+      try {
+        if (!result.isFullDayBlocked) {
+          await prisma.blockedSlot.deleteMany({ where: { date, timeSlot: null } });
+        } else {
+          await prisma.blockedSlot.create({
+            data: { date, timeSlot: null, reason: reason || 'Day turned OFF by doctor' },
+          });
+        }
+      } catch {
+        // Ignore local DB error
+      }
+
+      return NextResponse.json({
+        success: true,
+        action: result.isFullDayBlocked ? 'DAY_BLOCKED' : 'DAY_UNBLOCKED',
+        isFullDayBlocked: result.isFullDayBlocked,
+        message: result.isFullDayBlocked
+          ? `Pura din (${date}) band (OFF) kar diya gaya hai`
+          : `Pura din (${date}) chalu (ON) kar diya gaya hai`,
       });
-
-      if (existingDayBlock) {
-        // Entire day was blocked -> UNBLOCK THE DAY
-        await prisma.blockedSlot.delete({
-          where: { id: existingDayBlock.id },
-        });
-        return NextResponse.json({
-          success: true,
-          action: 'DAY_UNBLOCKED',
-          isFullDayBlocked: false,
-          message: `Date ${date} is now OPEN for bookings`,
-        });
-      } else {
-        // Block entire day
-        await prisma.blockedSlot.create({
-          data: {
-            date,
-            timeSlot: null,
-            reason: reason || 'Entire day turned OFF by doctor',
-          },
-        });
-        return NextResponse.json({
-          success: true,
-          action: 'DAY_BLOCKED',
-          isFullDayBlocked: true,
-          message: `Entire date ${date} is now turned OFF (No bookings allowed)`,
-        });
-      }
     }
 
     // Action 3: Cancel booking to instantly free up slot
@@ -280,54 +283,71 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'bookingId is required' }, { status: 400 });
       }
 
-      const updated = await prisma.booking.update({
-        where: { id: bookingId },
-        data: { status: 'CANCELLED' },
-      });
+      await cancelBookingInStore(bookingId);
+
+      try {
+        await prisma.booking.update({
+          where: { id: bookingId },
+          data: { status: 'CANCELLED' },
+        });
+      } catch {
+        // Ignore local DB error
+      }
 
       return NextResponse.json({
         success: true,
         action: 'BOOKING_CANCELLED',
-        message: `Booking ${updated.bookingNumber} cancelled. Slot is now available!`,
+        message: 'Booking cancel ho gayi hai aur slot ab available hai!',
       });
     }
 
-    // Default Fallback: Traditional Create Block
-    if (!date) {
-      return NextResponse.json({ error: 'Date is required' }, { status: 400 });
+    // Action 4: Save General Timing Settings
+    if (action === 'UPDATE_SETTINGS' || settings) {
+      const updatedSettings = await updateStoreSettings(settings || body);
+
+      try {
+        await prisma.adminSetting.upsert({
+          where: { id: 'default' },
+          update: {
+            morningStart: updatedSettings.morningStart,
+            morningEnd: updatedSettings.morningEnd,
+            eveningStart: updatedSettings.eveningStart,
+            eveningEnd: updatedSettings.eveningEnd,
+            slotDurationMin: updatedSettings.slotDurationMin,
+            bufferTimeMin: updatedSettings.bufferTimeMin,
+            workingDays: JSON.stringify(updatedSettings.workingDays),
+          },
+          create: {
+            id: 'default',
+            morningStart: updatedSettings.morningStart,
+            morningEnd: updatedSettings.morningEnd,
+            eveningStart: updatedSettings.eveningStart,
+            eveningEnd: updatedSettings.eveningEnd,
+            slotDurationMin: updatedSettings.slotDurationMin,
+            bufferTimeMin: updatedSettings.bufferTimeMin,
+            workingDays: JSON.stringify(updatedSettings.workingDays),
+          },
+        });
+      } catch {
+        // Ignore local DB error
+      }
+
+      return NextResponse.json({
+        success: true,
+        settings: updatedSettings,
+        message: 'Timing settings successfully save ho gayi hain aur live site par update ho gayi hain!',
+      });
     }
 
-    const created = await prisma.blockedSlot.create({
-      data: {
-        date,
-        timeSlot: timeSlot || null,
-        reason: reason || 'Blocked by doctor',
-      },
-    });
+    // Fallback block creation
+    if (date && timeSlot) {
+      await toggleSlotInStore(date, timeSlot, reason);
+      return NextResponse.json({ success: true });
+    }
 
-    return NextResponse.json({ success: true, blocked: created });
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error) {
     console.error('Error in POST /api/admin/block-slot:', error);
-    return NextResponse.json({ error: 'Failed to process schedule change' }, { status: 500 });
-  }
-}
-
-export async function DELETE(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
-
-    if (!id) {
-      return NextResponse.json({ error: 'ID is required' }, { status: 400 });
-    }
-
-    await prisma.blockedSlot.delete({
-      where: { id },
-    });
-
-    return NextResponse.json({ success: true, message: 'Unblocked successfully' });
-  } catch (error) {
-    console.error('Error deleting block:', error);
-    return NextResponse.json({ error: 'Failed to unblock' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to process request' }, { status: 500 });
   }
 }

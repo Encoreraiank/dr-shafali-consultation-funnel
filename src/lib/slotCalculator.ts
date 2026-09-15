@@ -1,6 +1,7 @@
 import prisma from './db';
 import { Slot } from '@/types';
 import { format, parse, addMinutes, isAfter, isBefore, isSameDay } from 'date-fns';
+import { getCloudStore } from './cloudStore';
 
 export async function getAvailableSlotsForDate(dateString: string): Promise<{
   date: string;
@@ -8,73 +9,18 @@ export async function getAvailableSlotsForDate(dateString: string): Promise<{
   message?: string;
   slots: Slot[];
 }> {
-  // Clean expired locks first
-  try {
-    await prisma.temporaryLock.deleteMany({
-      where: {
-        expiresAt: {
-          lt: new Date(),
-        },
-      },
-    });
-  } catch {
-    // Ignore if table not yet migrated during first run
-  }
+  // 1. Fetch live cloud store data (settings, blocked slots, bookings)
+  const cloudStore = await getCloudStore();
+  const settings = cloudStore.settings;
 
-  // Get admin settings
-  let settings: {
-    workingDays: string;
-    morningStart: string;
-    morningEnd: string;
-    eveningStart: string;
-    eveningEnd: string;
-    slotDurationMin: number;
-    bufferTimeMin: number;
-  } = {
-    workingDays: JSON.stringify(['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']),
-    morningStart: '10:00',
-    morningEnd: '13:00',
-    eveningStart: '17:00',
-    eveningEnd: '20:00',
-    slotDurationMin: 5,
-    bufferTimeMin: 2,
-  };
-
-  try {
-    const dbSettings = await prisma.adminSetting.findUnique({
-      where: { id: 'default' },
-    });
-    if (dbSettings) {
-      settings = {
-        workingDays: dbSettings.workingDays,
-        morningStart: dbSettings.morningStart,
-        morningEnd: dbSettings.morningEnd,
-        eveningStart: dbSettings.eveningStart,
-        eveningEnd: dbSettings.eveningEnd,
-        slotDurationMin: dbSettings.slotDurationMin,
-        bufferTimeMin: dbSettings.bufferTimeMin,
-      };
-    }
-  } catch (err) {
-    console.error('Error reading settings, using defaults:', err);
-  }
-
-  // Parse working days (all 7 days open by default)
-  let allowedDays: string[] = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-  try {
-    allowedDays = JSON.parse(settings.workingDays);
-    if (!Array.isArray(allowedDays) || allowedDays.length === 0) {
-      allowedDays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-    }
-  } catch {
-    allowedDays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-  }
+  const allowedDays = Array.isArray(settings.workingDays) && settings.workingDays.length > 0
+    ? settings.workingDays
+    : ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
   const queryDate = parse(dateString, 'yyyy-MM-dd', new Date());
   const dayName = format(queryDate, 'EEE').toUpperCase(); // e.g. "MON"
 
   if (!allowedDays.includes(dayName)) {
-    // If not in working days, still provide slots with message
     return {
       date: dateString,
       isAvailableDay: false,
@@ -83,15 +29,29 @@ export async function getAvailableSlotsForDate(dateString: string): Promise<{
     };
   }
 
-  // Check if date is blocked
-  let blockedTimeSlots = new Set<string>();
+  // 2. Check if date or specific slot is blocked in cloud store
+  const blockedEntriesForDate = cloudStore.blockedSlots.filter((b) => b.date === dateString);
+  const fullDayBlocked = blockedEntriesForDate.some((b) => !b.timeSlot);
+
+  if (fullDayBlocked) {
+    return {
+      date: dateString,
+      isAvailableDay: false,
+      message: 'Dr. Shafali Garg has marked this entire day as busy/leave.',
+      slots: [],
+    };
+  }
+
+  const blockedTimeSlots = new Set<string>(
+    blockedEntriesForDate.filter((b) => Boolean(b.timeSlot)).map((b) => b.timeSlot!)
+  );
+
+  // Also check local DB if available
   try {
-    const blockedEntries = await prisma.blockedSlot.findMany({
+    const localBlocked = await prisma.blockedSlot.findMany({
       where: { date: dateString },
     });
-
-    const fullDayBlocked = blockedEntries.some((b) => !b.timeSlot);
-    if (fullDayBlocked) {
+    if (localBlocked.some((b) => !b.timeSlot)) {
       return {
         date: dateString,
         isAvailableDay: false,
@@ -99,52 +59,33 @@ export async function getAvailableSlotsForDate(dateString: string): Promise<{
         slots: [],
       };
     }
-
-    blockedTimeSlots = new Set(
-      blockedEntries.filter((b) => b.timeSlot).map((b) => b.timeSlot!)
-    );
+    localBlocked.filter((b) => b.timeSlot).forEach((b) => blockedTimeSlots.add(b.timeSlot!));
   } catch {
     // Ignore db read error
   }
 
-  // Fetch confirmed & pending bookings for this date
-  let bookedSlots = new Set<string>();
+  // 3. Fetch confirmed & pending bookings for this date from Cloud Store & DB
+  const bookedSlots = new Set<string>();
+  cloudStore.bookings
+    .filter((b) => b.date === dateString && b.status !== 'CANCELLED')
+    .forEach((b) => bookedSlots.add(b.timeSlot));
+
   try {
     const existingBookings = await prisma.booking.findMany({
       where: {
         date: dateString,
-        status: {
-          in: ['CONFIRMED', 'PENDING'],
-        },
+        status: { in: ['CONFIRMED', 'PENDING'] },
       },
-      select: {
-        timeSlot: true,
-      },
+      select: { timeSlot: true },
     });
-    bookedSlots = new Set(existingBookings.map((b) => b.timeSlot));
+    existingBookings.forEach((b) => bookedSlots.add(b.timeSlot));
   } catch {
     // Ignore db read error
   }
 
-  // Fetch active locks
-  let lockedSlots = new Set<string>();
-  try {
-    const activeLocks = await prisma.temporaryLock.findMany({
-      where: {
-        date: dateString,
-        expiresAt: {
-          gt: new Date(),
-        },
-      },
-    });
-    lockedSlots = new Set(activeLocks.map((l) => l.timeSlot));
-  } catch {
-    // Ignore db read error
-  }
-
-  const slotDuration = settings.slotDurationMin || 5;
-  const bufferTime = settings.bufferTimeMin || 2;
-  const stepMinutes = slotDuration + bufferTime; // 7 minutes between slot starts
+  const slotDuration = Number(settings.slotDurationMin) || 5;
+  const bufferTime = Number(settings.bufferTimeMin) || 2;
+  const stepMinutes = slotDuration + bufferTime;
 
   const slots: Slot[] = [];
 
@@ -173,9 +114,8 @@ export async function getAvailableSlotsForDate(dateString: string): Promise<{
 
       const isBooked = bookedSlots.has(displayTime);
       const isBlocked = blockedTimeSlots.has(displayTime);
-      const isLocked = lockedSlots.has(displayTime);
 
-      const isAvailable = !isPast && !isBooked && !isBlocked && !isLocked;
+      const isAvailable = !isPast && !isBooked && !isBlocked;
 
       slots.push({
         id: `${dateString}_${displayTime.replace(/\s+/g, '_')}`,
@@ -185,7 +125,7 @@ export async function getAvailableSlotsForDate(dateString: string): Promise<{
         displayTime,
         period: range.period,
         isAvailable,
-        isLocked,
+        isLocked: isBooked,
       });
 
       // Advance by slot duration + buffer

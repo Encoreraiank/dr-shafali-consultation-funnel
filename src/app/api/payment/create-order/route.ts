@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPaymentOrder, generateBookingNumber } from '@/lib/payment';
 import prisma from '@/lib/db';
+import { getCloudStore, addBookingToStore } from '@/lib/cloudStore';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { patientName, patientPhone, patientEmail, problemCategory, problemDetail, date, timeSlot, sessionId } = body;
+    const { patientName, patientPhone, patientEmail, problemCategory, problemDetail, date, timeSlot } = body;
 
     if (!patientName?.trim()) {
       return NextResponse.json(
@@ -28,60 +29,36 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. Check if whole day or this slot is blocked by admin
-    try {
-      const isBlocked = await prisma.blockedSlot.findFirst({
-        where: {
-          date,
-          OR: [
-            { timeSlot: null },
-            { timeSlot: timeSlot },
-          ],
-        },
-      });
+    // 1. Collision check using Cloud Store
+    const cloudStore = await getCloudStore();
 
-      if (isBlocked) {
-        return NextResponse.json(
-          { error: 'This time slot is marked as unavailable. Please choose another slot.' },
-          { status: 409 }
-        );
-      }
+    // Check if whole day or this slot is blocked
+    const isBlocked = cloudStore.blockedSlots.some(
+      (b) => b.date === date && (!b.timeSlot || b.timeSlot === timeSlot)
+    );
 
-      // 2. Check if already booked
-      const isBooked = await prisma.booking.findFirst({
-        where: {
-          date,
-          timeSlot,
-          status: { in: ['CONFIRMED', 'PENDING'] },
-        },
-      });
-
-      if (isBooked) {
-        return NextResponse.json(
-          { error: 'This time slot was just booked by another user. Please choose another slot.' },
-          { status: 409 }
-        );
-      }
-    } catch (err) {
-      console.error('Error checking slot collision:', err);
+    if (isBlocked) {
+      return NextResponse.json(
+        { error: 'This time slot is marked as unavailable. Please choose another slot.' },
+        { status: 409 }
+      );
     }
 
-    // Get current fee from env or settings (defaults to 21 for launch)
-    const envFee = process.env.NEXT_PUBLIC_CONSULTATION_FEE ? Number(process.env.NEXT_PUBLIC_CONSULTATION_FEE) : 21;
-    let fee = envFee || 21;
-    let upiId = process.env.DOCTOR_UPI_ID || '9540329351@ptsbi';
+    // Check if already booked
+    const isBooked = cloudStore.bookings.some(
+      (b) => b.date === date && b.timeSlot === timeSlot && b.status !== 'CANCELLED'
+    );
 
-    try {
-      const settings = await prisma.adminSetting.findUnique({
-        where: { id: 'default' },
-      });
-      if (settings?.consultationFee) {
-        fee = settings.consultationFee;
-      }
-    } catch {
-      fee = envFee || 21;
+    if (isBooked) {
+      return NextResponse.json(
+        { error: 'This time slot was just booked by another user. Please choose another slot.' },
+        { status: 409 }
+      );
     }
 
+    // Get current fee from store
+    const fee = cloudStore.settings.consultationFee || 21;
+    const upiId = process.env.DOCTOR_UPI_ID || '9540329351@ptsbi';
     const bookingNumber = generateBookingNumber();
 
     // Parse start and end time
@@ -99,7 +76,22 @@ export async function POST(req: NextRequest) {
       endTime = new Date(date);
     }
 
-    // Persist booking in database so the slot is instantly turned OFF for other users
+    // Persist booking in Cloud Store (persists across all Vercel instances)
+    await addBookingToStore({
+      bookingNumber,
+      patientName: patientName.trim(),
+      patientPhone: patientPhone.trim(),
+      patientEmail: patientEmail?.trim() || null,
+      problemCategory: problemCategory || 'General Guidance',
+      problemDetail: problemDetail?.trim() || `${problemCategory || 'General'} consultation guidance`,
+      date,
+      timeSlot,
+      amount: fee,
+      status: 'CONFIRMED',
+      meetUrl: 'https://meet.google.com/zvc-aaww-mpo',
+    });
+
+    // Also persist in local DB if possible
     try {
       await prisma.booking.create({
         data: {
@@ -121,7 +113,7 @@ export async function POST(req: NextRequest) {
         },
       });
     } catch (dbErr) {
-      console.error('Failed to persist booking:', dbErr);
+      console.error('Local DB create skipped:', dbErr);
     }
 
     const order = await createPaymentOrder({
