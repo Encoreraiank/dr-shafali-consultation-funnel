@@ -140,17 +140,25 @@ export default function AppHome() {
     },
   ];
 
-  // Fetch slots whenever selectedDate changes
+  // Fetch slots whenever selectedDate changes with absolute real-time freshness
   useEffect(() => {
     async function fetchSlots() {
       setIsLoadingSlots(true);
       try {
-        const res = await fetch(`/api/slots?date=${selectedDate}`);
+        const res = await fetch(`/api/slots?date=${selectedDate}&_t=${Date.now()}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            Pragma: 'no-cache',
+          },
+        });
         const data = await res.json();
+        const availableSlots = (data.slots || []).filter((s: Slot) => s.isAvailable);
         setSlots(data.slots || []);
-        if (data.slots && data.slots.length > 0) {
-          const firstAvail = data.slots.find((s: Slot) => s.isAvailable);
-          if (firstAvail) setSelectedSlot(firstAvail.displayTime);
+        if (availableSlots.length > 0) {
+          setSelectedSlot(availableSlots[0].displayTime);
+        } else {
+          setSelectedSlot('');
         }
       } catch (err) {
         console.error(err);

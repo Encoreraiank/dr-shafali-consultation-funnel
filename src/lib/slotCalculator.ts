@@ -1,7 +1,19 @@
 import prisma from './db';
 import { Slot } from '@/types';
-import { format, parse, addMinutes, isAfter, isBefore, isSameDay } from 'date-fns';
+import { format, parse, addMinutes, isBefore, isAfter } from 'date-fns';
 import { getCloudStore } from './cloudStore';
+
+function getCurrentISTDate(): Date {
+  try {
+    const now = new Date();
+    const istString = now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+    return new Date(istString);
+  } catch {
+    return new Date();
+  }
+}
+
+const normalizeSlot = (s: string) => (s || '').replace(/\s+/g, ' ').trim().toUpperCase();
 
 export async function getAvailableSlotsForDate(dateString: string): Promise<{
   date: string;
@@ -10,11 +22,11 @@ export async function getAvailableSlotsForDate(dateString: string): Promise<{
   slots: Slot[];
 }> {
   // 1. Fetch live cloud store data (settings, blocked slots, bookings)
-  const cloudStore = await getCloudStore();
+  const cloudStore = await getCloudStore(true);
   const settings = cloudStore.settings;
 
   const allowedDays = Array.isArray(settings.workingDays) && settings.workingDays.length > 0
-    ? settings.workingDays
+    ? settings.workingDays.map((d) => d.toUpperCase())
     : ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
   const queryDate = parse(dateString, 'yyyy-MM-dd', new Date());
@@ -43,7 +55,7 @@ export async function getAvailableSlotsForDate(dateString: string): Promise<{
   }
 
   const blockedTimeSlots = new Set<string>(
-    blockedEntriesForDate.filter((b) => Boolean(b.timeSlot)).map((b) => b.timeSlot!)
+    blockedEntriesForDate.filter((b) => Boolean(b.timeSlot)).map((b) => normalizeSlot(b.timeSlot!))
   );
 
   // Also check local DB if available
@@ -59,7 +71,7 @@ export async function getAvailableSlotsForDate(dateString: string): Promise<{
         slots: [],
       };
     }
-    localBlocked.filter((b) => b.timeSlot).forEach((b) => blockedTimeSlots.add(b.timeSlot!));
+    localBlocked.filter((b) => b.timeSlot).forEach((b) => blockedTimeSlots.add(normalizeSlot(b.timeSlot!)));
   } catch {
     // Ignore db read error
   }
@@ -68,7 +80,7 @@ export async function getAvailableSlotsForDate(dateString: string): Promise<{
   const bookedSlots = new Set<string>();
   cloudStore.bookings
     .filter((b) => b.date === dateString && b.status !== 'CANCELLED')
-    .forEach((b) => bookedSlots.add(b.timeSlot));
+    .forEach((b) => bookedSlots.add(normalizeSlot(b.timeSlot)));
 
   try {
     const existingBookings = await prisma.booking.findMany({
@@ -78,13 +90,13 @@ export async function getAvailableSlotsForDate(dateString: string): Promise<{
       },
       select: { timeSlot: true },
     });
-    existingBookings.forEach((b) => bookedSlots.add(b.timeSlot));
+    existingBookings.forEach((b) => bookedSlots.add(normalizeSlot(b.timeSlot)));
   } catch {
     // Ignore db read error
   }
 
   const slotDuration = Number(settings.slotDurationMin) || 5;
-  const bufferTime = Number(settings.bufferTimeMin) || 2;
+  const bufferTime = Number(settings.bufferTimeMin) !== undefined ? Number(settings.bufferTimeMin) : 2;
   const stepMinutes = slotDuration + bufferTime;
 
   const slots: Slot[] = [];
@@ -94,8 +106,10 @@ export async function getAvailableSlotsForDate(dateString: string): Promise<{
     { start: settings.eveningStart || '17:00', end: settings.eveningEnd || '20:00', period: 'evening' as const },
   ];
 
-  const now = new Date();
-  const isToday = isSameDay(queryDate, now);
+  const istNow = getCurrentISTDate();
+  const todayISTString = format(istNow, 'yyyy-MM-dd');
+  const isToday = dateString === todayISTString;
+  const currentISTTotalMinutes = istNow.getHours() * 60 + istNow.getMinutes();
 
   for (const range of timeRanges) {
     let currentSlotStart = parse(`${dateString} ${range.start}`, 'yyyy-MM-dd HH:mm', new Date());
@@ -108,12 +122,17 @@ export async function getAvailableSlotsForDate(dateString: string): Promise<{
       const startTimeStr = format(currentSlotStart, 'hh:mm a');
       const endTimeStr = format(currentSlotEnd, 'hh:mm a');
       const displayTime = `${startTimeStr} - ${endTimeStr}`;
+      const normalizedDisplay = normalizeSlot(displayTime);
 
-      // If today, check if slot has already passed (15 mins advance window)
-      const isPast = isToday && isBefore(currentSlotStart, addMinutes(now, 15));
+      // Check if past for today using IST minutes
+      let isPast = false;
+      if (isToday) {
+        const slotStartMinutes = currentSlotStart.getHours() * 60 + currentSlotStart.getMinutes();
+        isPast = slotStartMinutes <= currentISTTotalMinutes + 10;
+      }
 
-      const isBooked = bookedSlots.has(displayTime);
-      const isBlocked = blockedTimeSlots.has(displayTime);
+      const isBooked = bookedSlots.has(normalizedDisplay);
+      const isBlocked = blockedTimeSlots.has(normalizedDisplay);
 
       const isAvailable = !isPast && !isBooked && !isBlocked;
 
@@ -128,7 +147,6 @@ export async function getAvailableSlotsForDate(dateString: string): Promise<{
         isLocked: isBooked,
       });
 
-      // Advance by slot duration + buffer
       currentSlotStart = addMinutes(currentSlotStart, stepMinutes);
     }
   }

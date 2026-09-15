@@ -157,7 +157,10 @@ export default function SimpleScheduleManager() {
   const fetchDateSlots = useCallback(async (date: string) => {
     setIsLoadingSlots(true);
     try {
-      const res = await fetch(`/api/admin/block-slot?date=${date}`);
+      const res = await fetch(`/api/admin/block-slot?date=${date}&_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store' },
+      });
       const data = await res.json();
       if (res.ok) {
         setSlots(data.slots || []);
