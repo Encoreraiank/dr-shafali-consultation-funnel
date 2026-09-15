@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Calendar,
   Clock,
@@ -67,7 +67,16 @@ export default function SimpleScheduleManager() {
   const [slots, setSlots] = useState<SlotData[]>([]);
   const [isFullDayBlocked, setIsFullDayBlocked] = useState<boolean>(false);
   const [isLoadingSlots, setIsLoadingSlots] = useState<boolean>(true);
-  const [updatingSlotId, setUpdatingSlotId] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
+  // Ref to hold the latest slots for non-stale atomic sync
+  const slotsRef = useRef<SlotData[]>([]);
+  slotsRef.current = slots;
+
+  const isFullDayBlockedRef = useRef<boolean>(false);
+  isFullDayBlockedRef.current = isFullDayBlocked;
+
+  const syncDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // Toast Feedback State
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -112,7 +121,7 @@ export default function SimpleScheduleManager() {
     setToastMessage({ text, type });
     setTimeout(() => {
       setToastMessage(null);
-    }, 3500);
+    }, 3000);
   };
 
   // Check login on load
@@ -175,67 +184,78 @@ export default function SimpleScheduleManager() {
     }
   }, [selectedDate, isAuthenticated, fetchDateSlots]);
 
-  // 1-Click Slot Toggle (ON / OFF)
-  const handleToggleSlot = async (slot: SlotData) => {
-    if (slot.status === 'BOOKED') {
-      setSelectedBookingSlot(slot);
+  // Atomic sync of all blocked slots for the active date to cloud server
+  const syncBlocksToServer = useCallback((dateToSync: string, updatedSlots: SlotData[], fullDayBlocked: boolean) => {
+    if (syncDebounceRef.current) {
+      clearTimeout(syncDebounceRef.current);
+    }
+
+    setIsSyncing(true);
+
+    syncDebounceRef.current = setTimeout(async () => {
+      try {
+        const blockedTimeSlots = updatedSlots
+          .filter((s) => s.status === 'BLOCKED')
+          .map((s) => s.displayTime);
+
+        const res = await fetch('/api/admin/block-slot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'SET_DATE_BLOCKS',
+            date: dateToSync,
+            blockedTimeSlots,
+            isFullDayBlocked: fullDayBlocked,
+          }),
+        });
+
+        if (res.ok) {
+          showToast('✅ Changes saved to live website!');
+        }
+      } catch (err) {
+        console.error('Failed to sync blocks:', err);
+        showToast('Sync error, please refresh', 'error');
+      } finally {
+        setIsSyncing(false);
+      }
+    }, 400); // 400ms debounce ensures rapid clicks are batched together cleanly
+  }, []);
+
+  // 1-Click Slot Toggle (Optimistic & Batch-Safe)
+  const handleToggleSlot = (clickedSlot: SlotData) => {
+    if (clickedSlot.status === 'BOOKED') {
+      setSelectedBookingSlot(clickedSlot);
       return;
     }
 
-    setUpdatingSlotId(slot.id);
-    try {
-      const res = await fetch('/api/admin/block-slot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'TOGGLE_SLOT',
-          date: selectedDate,
-          timeSlot: slot.displayTime,
-          reason: slot.status === 'AVAILABLE' ? 'Turned OFF by doctor' : undefined,
-        }),
-      });
+    // 1. Instantly toggle in local UI state without any delay
+    const newStatus: 'AVAILABLE' | 'BLOCKED' = clickedSlot.status === 'AVAILABLE' ? 'BLOCKED' : 'AVAILABLE';
 
-      const data = await res.json();
-      if (res.ok) {
-        showToast(data.message || 'Slot update ho gaya hai!');
-        fetchDateSlots(selectedDate);
-      } else {
-        showToast(data.error || 'Update failed', 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Network issue, please try again', 'error');
-    } finally {
-      setUpdatingSlotId(null);
-    }
+    const updatedSlots: SlotData[] = slots.map((s) =>
+      s.id === clickedSlot.id ? { ...s, status: newStatus } : s
+    );
+
+    setSlots(updatedSlots);
+
+    // 2. Schedule atomic sync to server
+    syncBlocksToServer(selectedDate, updatedSlots, isFullDayBlocked);
   };
 
   // 1-Click Whole Day Toggle (Pura Din ON / OFF)
-  const handleToggleWholeDay = async () => {
-    setIsLoadingSlots(true);
-    try {
-      const res = await fetch('/api/admin/block-slot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'TOGGLE_DAY',
-          date: selectedDate,
-        }),
-      });
+  const handleToggleWholeDay = () => {
+    const nextFullDayBlocked = !isFullDayBlocked;
+    setIsFullDayBlocked(nextFullDayBlocked);
 
-      const data = await res.json();
-      if (res.ok) {
-        showToast(data.message || 'Day update ho gaya!');
-        fetchDateSlots(selectedDate);
-      } else {
-        showToast(data.error || 'Failed to toggle day', 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Network error', 'error');
-    } finally {
-      setIsLoadingSlots(false);
-    }
+    // Update all slots visual status
+    const updatedSlots: SlotData[] = slots.map((s) => ({
+      ...s,
+      status: nextFullDayBlocked
+        ? (s.status === 'BOOKED' ? 'BOOKED' : 'BLOCKED')
+        : (s.status === 'BOOKED' ? 'BOOKED' : 'AVAILABLE'),
+    }));
+
+    setSlots(updatedSlots);
+    syncBlocksToServer(selectedDate, updatedSlots, nextFullDayBlocked);
   };
 
   // Save Doctor Shift Timings
@@ -411,8 +431,9 @@ export default function SimpleScheduleManager() {
               <h1 className="text-sm sm:text-base font-extrabold text-slate-900 font-serif">
                 Dr. Shafali Garg — Slot & Timing Control
               </h1>
-              <p className="text-[10px] text-emerald-700 font-bold">
-                ⚡ Live Site par turant update hota hai
+              <p className="text-[10px] text-emerald-700 font-bold flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Live Site Connected {isSyncing ? '(Saving...)' : '(Ready)'}</span>
               </p>
             </div>
           </div>
@@ -422,7 +443,7 @@ export default function SimpleScheduleManager() {
             className="py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5"
             title="Refresh"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingSlots ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingSlots || isSyncing ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
         </div>
@@ -542,7 +563,6 @@ export default function SimpleScheduleManager() {
               <button
                 type="button"
                 onClick={handleToggleWholeDay}
-                disabled={isLoadingSlots}
                 className={`py-3 px-6 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all shrink-0 ${
                   isFullDayBlocked
                     ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
@@ -620,7 +640,6 @@ export default function SimpleScheduleManager() {
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
                     {morningSlots.map((slot) => {
-                      const isUpdating = updatingSlotId === slot.id;
                       const isAvail = slot.status === 'AVAILABLE';
                       const isBlk = slot.status === 'BLOCKED';
                       const isBkd = slot.status === 'BOOKED';
@@ -630,7 +649,6 @@ export default function SimpleScheduleManager() {
                           key={slot.id}
                           type="button"
                           onClick={() => handleToggleSlot(slot)}
-                          disabled={isUpdating}
                           className={`p-3 rounded-2xl border text-left transition-all active:scale-95 shadow-xs flex flex-col justify-between min-h-[75px] ${
                             isAvail
                               ? 'bg-emerald-50 hover:bg-emerald-100/90 border-emerald-300 text-emerald-950'
@@ -655,11 +673,7 @@ export default function SimpleScheduleManager() {
                           </div>
 
                           <div className="mt-1 text-[10px] font-bold truncate">
-                            {isUpdating ? (
-                              <span className="text-slate-500 flex items-center gap-1">
-                                <Loader2 className="w-3 h-3 animate-spin" /> Saving...
-                              </span>
-                            ) : isAvail ? (
+                            {isAvail ? (
                               <span className="text-emerald-700">Open (Click to Band)</span>
                             ) : isBlk ? (
                               <span className="text-rose-700">Band (Click to Chalu)</span>
@@ -689,7 +703,6 @@ export default function SimpleScheduleManager() {
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
                     {eveningSlots.map((slot) => {
-                      const isUpdating = updatingSlotId === slot.id;
                       const isAvail = slot.status === 'AVAILABLE';
                       const isBlk = slot.status === 'BLOCKED';
                       const isBkd = slot.status === 'BOOKED';
@@ -699,7 +712,6 @@ export default function SimpleScheduleManager() {
                           key={slot.id}
                           type="button"
                           onClick={() => handleToggleSlot(slot)}
-                          disabled={isUpdating}
                           className={`p-3 rounded-2xl border text-left transition-all active:scale-95 shadow-xs flex flex-col justify-between min-h-[75px] ${
                             isAvail
                               ? 'bg-emerald-50 hover:bg-emerald-100/90 border-emerald-300 text-emerald-950'
@@ -724,11 +736,7 @@ export default function SimpleScheduleManager() {
                           </div>
 
                           <div className="mt-1 text-[10px] font-bold truncate">
-                            {isUpdating ? (
-                              <span className="text-slate-500 flex items-center gap-1">
-                                <Loader2 className="w-3 h-3 animate-spin" /> Saving...
-                              </span>
-                            ) : isAvail ? (
+                            {isAvail ? (
                               <span className="text-emerald-700">Open (Click to Band)</span>
                             ) : isBlk ? (
                               <span className="text-rose-700">Band (Click to Chalu)</span>

@@ -46,7 +46,7 @@ export interface CloudStoreData {
   bookings: CloudBooking[];
 }
 
-const DEFAULT_STORE_DATA: CloudStoreData = {
+export const DEFAULT_STORE_DATA: CloudStoreData = {
   settings: {
     workingDays: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'],
     morningStart: '10:00',
@@ -62,13 +62,13 @@ const DEFAULT_STORE_DATA: CloudStoreData = {
   bookings: [],
 };
 
-// In-memory short-lived cache to keep response times fast (<5ms)
+// In-memory short-lived cache (500ms max for high concurrency)
 let inMemoryCache: { data: CloudStoreData; lastFetched: number } | null = null;
-const CACHE_TTL_MS = 2000; // 2 seconds
+const CACHE_TTL_MS = 500;
 
-export async function getCloudStore(): Promise<CloudStoreData> {
+export async function getCloudStore(forceFresh: boolean = false): Promise<CloudStoreData> {
   const now = Date.now();
-  if (inMemoryCache && now - inMemoryCache.lastFetched < CACHE_TTL_MS) {
+  if (!forceFresh && inMemoryCache && now - inMemoryCache.lastFetched < CACHE_TTL_MS) {
     return inMemoryCache.data;
   }
 
@@ -118,7 +118,7 @@ export async function saveCloudStore(newData: CloudStoreData): Promise<boolean> 
 }
 
 export async function updateStoreSettings(newSettings: Partial<CloudStoreSettings>): Promise<CloudStoreSettings> {
-  const currentStore = await getCloudStore();
+  const currentStore = await getCloudStore(true);
   const updatedSettings: CloudStoreSettings = {
     ...currentStore.settings,
     ...newSettings,
@@ -133,14 +133,58 @@ export async function updateStoreSettings(newSettings: Partial<CloudStoreSetting
   return updatedSettings;
 }
 
+// Atomic Set of all blocked slots for a specific date (eliminates race conditions completely)
+export async function setDateBlocksInStore(
+  date: string,
+  blockedTimeSlots: string[],
+  isFullDayBlocked?: boolean
+): Promise<CloudStoreData> {
+  const currentStore = await getCloudStore(true);
+
+  // Keep blocks for all OTHER dates
+  const otherDatesBlocks = currentStore.blockedSlots.filter((b) => b.date !== date);
+
+  const newBlocksForDate: CloudBlockedSlot[] = [];
+
+  if (isFullDayBlocked) {
+    newBlocksForDate.push({
+      id: `dayblk_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      date,
+      timeSlot: null,
+      reason: 'Full day turned OFF by doctor',
+      createdAt: new Date().toISOString(),
+    });
+  } else {
+    // Deduplicate slot strings
+    const uniqueSlots = Array.from(new Set(blockedTimeSlots.filter(Boolean)));
+    uniqueSlots.forEach((slotTime) => {
+      newBlocksForDate.push({
+        id: `blk_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        date,
+        timeSlot: slotTime,
+        reason: 'Turned OFF by doctor',
+        createdAt: new Date().toISOString(),
+      });
+    });
+  }
+
+  const updatedStore: CloudStoreData = {
+    ...currentStore,
+    blockedSlots: [...otherDatesBlocks, ...newBlocksForDate],
+  };
+
+  await saveCloudStore(updatedStore);
+  return updatedStore;
+}
+
 export async function toggleSlotInStore(date: string, timeSlot: string, reason?: string) {
-  const currentStore = await getCloudStore();
+  const currentStore = await getCloudStore(true);
   const existingIdx = currentStore.blockedSlots.findIndex(
     (b) => b.date === date && b.timeSlot === timeSlot
   );
 
   let action: 'UNBLOCKED' | 'BLOCKED' = 'BLOCKED';
-  let updatedBlocks = [...currentStore.blockedSlots];
+  const updatedBlocks = [...currentStore.blockedSlots];
 
   if (existingIdx >= 0) {
     // Already blocked -> Remove it (Turn ON)
@@ -167,13 +211,13 @@ export async function toggleSlotInStore(date: string, timeSlot: string, reason?:
 }
 
 export async function toggleDayInStore(date: string, reason?: string) {
-  const currentStore = await getCloudStore();
+  const currentStore = await getCloudStore(true);
   const existingDayBlockIdx = currentStore.blockedSlots.findIndex(
     (b) => b.date === date && !b.timeSlot
   );
 
   let isFullDayBlocked = false;
-  let updatedBlocks = [...currentStore.blockedSlots];
+  const updatedBlocks = [...currentStore.blockedSlots];
 
   if (existingDayBlockIdx >= 0) {
     // Day was blocked -> Remove full-day block (Turn ON)
@@ -200,7 +244,7 @@ export async function toggleDayInStore(date: string, reason?: string) {
 }
 
 export async function addBookingToStore(booking: Omit<CloudBooking, 'id' | 'createdAt'>): Promise<CloudBooking> {
-  const currentStore = await getCloudStore();
+  const currentStore = await getCloudStore(true);
   const newBooking: CloudBooking = {
     ...booking,
     id: `bk_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -216,7 +260,7 @@ export async function addBookingToStore(booking: Omit<CloudBooking, 'id' | 'crea
 }
 
 export async function cancelBookingInStore(bookingId: string) {
-  const currentStore = await getCloudStore();
+  const currentStore = await getCloudStore(true);
   const updatedBookings = currentStore.bookings.map((b) =>
     b.id === bookingId || b.bookingNumber === bookingId ? { ...b, status: 'CANCELLED' as const } : b
   );
