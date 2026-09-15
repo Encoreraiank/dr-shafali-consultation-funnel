@@ -20,7 +20,8 @@ import {
   Moon,
   ArrowLeft,
   Loader2,
-  Check
+  Check,
+  RotateCcw
 } from 'lucide-react';
 import Link from 'next/link';
 import { format, addDays, parseISO } from 'date-fns';
@@ -69,7 +70,7 @@ export default function SimpleScheduleManager() {
   const [isLoadingSlots, setIsLoadingSlots] = useState<boolean>(true);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
-  // Ref to hold the latest slots for non-stale atomic sync
+  // Mutable refs to prevent stale closure race conditions
   const slotsRef = useRef<SlotData[]>([]);
   slotsRef.current = slots;
 
@@ -160,14 +161,16 @@ export default function SimpleScheduleManager() {
       const data = await res.json();
       if (res.ok) {
         setSlots(data.slots || []);
+        slotsRef.current = data.slots || [];
         setIsFullDayBlocked(data.isFullDayBlocked || false);
+        isFullDayBlockedRef.current = data.isFullDayBlocked || false;
         if (data.settings) {
           if (data.settings.morningStart) setMorningStart(data.settings.morningStart);
           if (data.settings.morningEnd) setMorningEnd(data.settings.morningEnd);
           if (data.settings.eveningStart) setEveningStart(data.settings.eveningStart);
           if (data.settings.eveningEnd) setEveningEnd(data.settings.eveningEnd);
           if (data.settings.slotDurationMin) setSlotDurationMin(data.settings.slotDurationMin);
-          if (data.settings.bufferTimeMin) setBufferTimeMin(data.settings.bufferTimeMin);
+          if (data.settings.bufferTimeMin !== undefined) setBufferTimeMin(data.settings.bufferTimeMin);
           if (data.settings.workingDays) setWorkingDays(data.settings.workingDays);
         }
       }
@@ -210,52 +213,69 @@ export default function SimpleScheduleManager() {
         });
 
         if (res.ok) {
-          showToast('✅ Changes saved to live website!');
+          showToast('✅ Live Website par save ho gaya!');
         }
       } catch (err) {
         console.error('Failed to sync blocks:', err);
-        showToast('Sync error, please refresh', 'error');
+        showToast('Sync issue, please refresh', 'error');
       } finally {
         setIsSyncing(false);
       }
-    }, 400); // 400ms debounce ensures rapid clicks are batched together cleanly
+    }, 300); // 300ms debounce batches rapid clicks perfectly
   }, []);
 
-  // 1-Click Slot Toggle (Optimistic & Batch-Safe)
+  // 1-Click Slot Toggle (Uses functional setState to NEVER lose clicks)
   const handleToggleSlot = (clickedSlot: SlotData) => {
     if (clickedSlot.status === 'BOOKED') {
       setSelectedBookingSlot(clickedSlot);
       return;
     }
 
-    // 1. Instantly toggle in local UI state without any delay
-    const newStatus: 'AVAILABLE' | 'BLOCKED' = clickedSlot.status === 'AVAILABLE' ? 'BLOCKED' : 'AVAILABLE';
+    setSlots((prevSlots) => {
+      const updatedSlots: SlotData[] = prevSlots.map((s) => {
+        if (s.id === clickedSlot.id || s.displayTime === clickedSlot.displayTime) {
+          const toggled: 'AVAILABLE' | 'BLOCKED' = s.status === 'AVAILABLE' ? 'BLOCKED' : 'AVAILABLE';
+          return { ...s, status: toggled };
+        }
+        return s;
+      });
 
-    const updatedSlots: SlotData[] = slots.map((s) =>
-      s.id === clickedSlot.id ? { ...s, status: newStatus } : s
-    );
-
-    setSlots(updatedSlots);
-
-    // 2. Schedule atomic sync to server
-    syncBlocksToServer(selectedDate, updatedSlots, isFullDayBlocked);
+      slotsRef.current = updatedSlots;
+      syncBlocksToServer(selectedDate, updatedSlots, isFullDayBlockedRef.current);
+      return updatedSlots;
+    });
   };
 
   // 1-Click Whole Day Toggle (Pura Din ON / OFF)
   const handleToggleWholeDay = () => {
     const nextFullDayBlocked = !isFullDayBlocked;
     setIsFullDayBlocked(nextFullDayBlocked);
+    isFullDayBlockedRef.current = nextFullDayBlocked;
 
-    // Update all slots visual status
-    const updatedSlots: SlotData[] = slots.map((s) => ({
-      ...s,
-      status: nextFullDayBlocked
-        ? (s.status === 'BOOKED' ? 'BOOKED' : 'BLOCKED')
-        : (s.status === 'BOOKED' ? 'BOOKED' : 'AVAILABLE'),
-    }));
+    setSlots((prevSlots) => {
+      const updatedSlots: SlotData[] = prevSlots.map((s) => ({
+        ...s,
+        status: nextFullDayBlocked
+          ? (s.status === 'BOOKED' ? 'BOOKED' : 'BLOCKED')
+          : (s.status === 'BOOKED' ? 'BOOKED' : 'AVAILABLE'),
+      }));
 
-    setSlots(updatedSlots);
-    syncBlocksToServer(selectedDate, updatedSlots, nextFullDayBlocked);
+      slotsRef.current = updatedSlots;
+      syncBlocksToServer(selectedDate, updatedSlots, nextFullDayBlocked);
+      return updatedSlots;
+    });
+  };
+
+  // Preset standard timing
+  const handleApplyPresetTimings = () => {
+    setMorningStart('10:00');
+    setMorningEnd('13:00');
+    setEveningStart('17:00');
+    setEveningEnd('20:00');
+    setSlotDurationMin(5);
+    setBufferTimeMin(2);
+    setWorkingDays(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']);
+    showToast('Standard Timings apply ho gayi hain! Ab neeche "Save" button dabayein.');
   };
 
   // Save Doctor Shift Timings
@@ -285,7 +305,7 @@ export default function SimpleScheduleManager() {
       const data = await res.json();
       if (res.ok) {
         setTimingSavedSuccess(true);
-        showToast('✅ Timing save ho gayi hai aur live site par update ho gayi!');
+        showToast('✅ Nayi Timing save ho gayi hai aur Live Site par update ho gayi!');
         fetchDateSlots(selectedDate);
         setTimeout(() => setTimingSavedSuccess(false), 4000);
       } else {
@@ -775,14 +795,26 @@ export default function SimpleScheduleManager() {
             onSubmit={handleSaveTimings}
             className="bg-white rounded-3xl border-2 border-orange-200 p-5 sm:p-7 shadow-md space-y-6 animate-in fade-in"
           >
-            <div className="pb-3 border-b border-orange-100">
-              <h3 className="text-base font-extrabold text-slate-900 font-serif flex items-center gap-2">
-                <Clock className="w-5 h-5 text-[#FF6B00]" />
-                <span>Doctor Consultation Timing Change Karein</span>
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Yahan se aap Morning aur Evening ka time badal sakti hain. Save karte hi live website par turant naye time slots ban jayenge.
-              </p>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-orange-100">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 font-serif flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-[#FF6B00]" />
+                  <span>Doctor Consultation Timing Change Karein</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Yahan se aap Morning aur Evening ka time badal sakti hain.
+                </p>
+              </div>
+
+              {/* Quick Reset to Standard Timing Button */}
+              <button
+                type="button"
+                onClick={handleApplyPresetTimings}
+                className="py-2 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold flex items-center gap-1.5 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                <span>Standard 10am-1pm & 5pm-8pm Lagayein</span>
+              </button>
             </div>
 
             {/* 1. Working Days */}
@@ -820,7 +852,7 @@ export default function SimpleScheduleManager() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div>
                   <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                    Shuru Ka Time (Morning Start):
+                    Morning Shuru Ka Time (Jaise 10:00 AM):
                   </label>
                   <input
                     type="time"
@@ -833,7 +865,7 @@ export default function SimpleScheduleManager() {
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                    Khatam Hone Ka Time (Morning End):
+                    Morning Khatam Hone Ka Time (Jaise 13:00 / 01:00 PM):
                   </label>
                   <input
                     type="time"
@@ -855,7 +887,7 @@ export default function SimpleScheduleManager() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div>
                   <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                    Shuru Ka Time (Evening Start):
+                    Evening Shuru Ka Time (Jaise 17:00 / 05:00 PM):
                   </label>
                   <input
                     type="time"
@@ -868,7 +900,7 @@ export default function SimpleScheduleManager() {
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                    Khatam Hone Ka Time (Evening End):
+                    Evening Khatam Hone Ka Time (Jaise 20:00 / 08:00 PM):
                   </label>
                   <input
                     type="time"
