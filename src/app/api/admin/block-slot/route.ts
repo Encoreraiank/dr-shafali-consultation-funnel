@@ -133,12 +133,15 @@ export async function GET(req: NextRequest) {
         let reason: string | undefined = undefined;
         let bookingData: AdminSlotItem['booking'] = undefined;
 
+        const isBooked = bookedMap.has(normalizedDisplay) || bookedMap.has(normalizeSlot(startTimeStr));
+        const isBlocked = blockedMap.has(normalizedDisplay) || blockedMap.has(normalizeSlot(startTimeStr));
+
         if (isFullDayBlocked) {
           status = 'BLOCKED';
           reason = 'Entire day blocked by doctor';
-        } else if (bookedMap.has(normalizedDisplay)) {
+        } else if (isBooked) {
           status = 'BOOKED';
-          const b = bookedMap.get(normalizedDisplay)!;
+          const b = (bookedMap.get(normalizedDisplay) || bookedMap.get(normalizeSlot(startTimeStr)))!;
           bookingData = {
             id: b.id,
             bookingNumber: b.bookingNumber,
@@ -151,9 +154,9 @@ export async function GET(req: NextRequest) {
             amount: b.amount,
             meetUrl: b.meetUrl,
           };
-        } else if (blockedMap.has(normalizedDisplay)) {
+        } else if (isBlocked) {
           status = 'BLOCKED';
-          const blk = blockedMap.get(normalizedDisplay)!;
+          const blk = (blockedMap.get(normalizedDisplay) || blockedMap.get(normalizeSlot(startTimeStr)))!;
           blockId = blk.id;
           reason = blk.reason || 'Turned OFF by doctor';
         } else if (isPast) {

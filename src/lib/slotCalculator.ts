@@ -131,8 +131,8 @@ export async function getAvailableSlotsForDate(dateString: string): Promise<{
         isPast = slotStartMinutes <= currentISTTotalMinutes + 10;
       }
 
-      const isBooked = bookedSlots.has(normalizedDisplay);
-      const isBlocked = blockedTimeSlots.has(normalizedDisplay);
+      const isBooked = bookedSlots.has(normalizedDisplay) || bookedSlots.has(normalizeSlot(startTimeStr));
+      const isBlocked = blockedTimeSlots.has(normalizedDisplay) || blockedTimeSlots.has(normalizeSlot(startTimeStr));
 
       const isAvailable = !isPast && !isBooked && !isBlocked;
 

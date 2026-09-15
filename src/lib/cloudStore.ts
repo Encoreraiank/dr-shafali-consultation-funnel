@@ -73,9 +73,14 @@ export async function getCloudStore(forceFresh: boolean = false): Promise<CloudS
   }
 
   try {
-    const res = await fetch(CLOUD_API_URL, {
+    const res = await fetch(`${CLOUD_API_URL}?_t=${Date.now()}`, {
       cache: 'no-store',
-      headers: { Accept: 'application/json' },
+      next: { revalidate: 0 },
+      headers: {
+        Accept: 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+      },
     });
 
     if (res.ok) {
@@ -103,7 +108,12 @@ export async function saveCloudStore(newData: CloudStoreData): Promise<boolean> 
   try {
     const res = await fetch(CLOUD_API_URL, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      next: { revalidate: 0 },
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      },
       body: JSON.stringify({
         name: 'dr_shafali_master_store_v1',
         data: newData,
